@@ -3,7 +3,6 @@ import numpy as np
 from cgls.python_scripts import cgls_nonlinear
 
 class CGLS_background_from_histogram(cgls_nonlinear.Cgls):
-    
     def __init__(self, x0, mus0, hists):
         """
         Solve for the dark background probability distribution given an array of histograms.
@@ -91,6 +90,7 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
         e = hists[n] * np.log(prob_tol + fs)
         error += np.sum(e)
     return -error
+
 
 # generate a random variable
 x = np.arange(-100, 150, 1)
