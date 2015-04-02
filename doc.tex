@@ -1,0 +1,121 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+%Gummi|065|=)
+\title{\textbf{Finding adu distributions or finding photons}}
+\author{Andrew Morgan}
+\date{}
+\begin{document}
+
+\maketitle
+
+\section{Before you start}
+
+\section{Maximum Likelihood for a single random variable}
+Thought experiment:
+
+\begin{itemize}
+
+  \item We have a single discrete random variable x with a distribution $f(x)$
+  \item $x$ is measured $N$ times but with an offset $f(x - \mu)$
+  \item This is repeated $M$ times with $M$ different offsets
+  \item $h^m_i$ is the histogram of $x_m$, the values of x on the m'th pixel, for $x_m = i$ in $0 \rightarrow I-1$
+
+\end{itemize}
+
+
+The probability of measuring our sequence of values $ x^m_n $ is:
+\begin{align}
+   Pr(x^m_n; f) &= \Pi_m^M \Pi_n^N f(x^m_n - \mu_m) = \Pi_m^M \Pi_i^I f(i - \mu_m)^{h^m_i}
+\end{align}
+
+The log likelihood is:
+\begin{align}
+   \ln(Pr(x^m_n; f)) &= \sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))
+\end{align}
+
+Our log likelihood error is:
+\begin{align}
+   \varepsilon(\mu_n, f_i) &= -\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))
+\end{align}
+with a minimum value of 0. 
+
+We could demand that the $\mu$'s are integer, so that shifting $f(i)$ is well defined. But this leads to problems in the minimization, since most refinement algorithms like a continuous set of variables and a continuous error function. Also we would expect that the shift of the distribution (or "dark value") at a pixel may not be an integer multiple of counts. 
+
+Another issue is that adding a constant to the mu's also corresponds to an overall shift in the probability distributions: mu + c <---> f(i - c). We can remove this redundancy by demanding that the sum of the mu's is equal to 0. This can be automatically satisfied if express the independent variables in Fourier space. Moving to Fourier space we have:
+
+\begin{align} 
+   \mu_m = \frac{1}{M} \sum_{l=0}^{M-1} \hat{\mu}_l e^{2\pi i \frac{m l}{M}}
+\end{align}
+
+Since mu is real the reciprocal space representation has Hermitian symmetry. To clear thing up lets define the discrete index $ l_f $ which maps $l$ to the Fourier frequency:
+
+ l   0  1  2  3  4  5  6  7    range(M)
+ fl  0  1  2  3  4 -3 -2 -1    np.fft.fftfreq(M, d=1/float(M))
+ wl (0  1  2  3  4 -3 -2 -1)/M np.fft.fftfreq(M)
+
+So now our variables are  
+\begin{align}
+   \hat{\mu}_l \text{  for } l &= 1, 2, 3 .. M/2 + 1 \text{  where}\\
+   \hat{\mu}_0 &= 0 \text{  and} \\
+   \hat{\mu}_{l_f} &= \hat{\mu}^*_{-l_f}
+\end{align}
+
+\begin{verbatim}
+
+def make_f_real(fhats, f_norm = 0.0):
+    """
+    Compute the real space representation of f given that 
+    f is real and that sum_i f_i = f_norm. The fhats are 
+    the complex Fourier space values of f from 1 to 
+    N // 2 + 1 where N is the size of the real space array.
+    
+    Parameters
+    ----------
+    fhats : 1d complex array
+        Fourier space values of f.
+    f_norm : float, optional
+        Sum of the real space function.
+              
+    Returns
+    -------
+    f : 1d float array
+        the realspace representation of fhats given f_norm.
+    """
+    fh = np.concatenate( ([f_norm], fhats) )
+    f  = np.fft.irfft(fh)
+    return f
+    
+\end{verbatim}
+
+The probability function f must also be normalized, but to 1. So it to, should expressed in Fourier space. Now we must define how the shift will happen. Using the Fourier shift theorem we have:
+
+\begin{align}
+f_{i - \mu_m} = \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j}
+\end{align}
+
+\begin{verbatim}
+
+def shift_f_real(f, shift):
+    """
+    Apply the Fourier shift algorithm to f by shift pixels.
+    
+    Parameters
+    ----------
+    f : float array
+        Real space values of f.
+    shift : float
+        The value in pixels of the shift amount.
+            
+    Returns
+    -------
+    f_shift : 1d float array
+        the realspace representation of fhats given f_norm.
+    """
+    fh      = np.fft.rfft(f)
+    ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) / float(f.shape[0]))
+    f_shift = np.fft.irfft(fh * ramp)
+    return f_shift
+
+\end{verbatim}
+
+\end{document}
