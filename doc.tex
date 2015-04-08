@@ -8,8 +8,6 @@
 
 \maketitle
 
-\section{Before you start}
-
 \section{Maximum Likelihood for a single random variable}
 Thought experiment:
 
@@ -49,9 +47,11 @@ Another issue is that adding a constant to the mu's also corresponds to an overa
 
 Since mu is real the reciprocal space representation has Hermitian symmetry. To clear thing up lets define the discrete index $ l_f $ which maps $l$ to the Fourier frequency:
 
+\begin{verbatim}
  l   0  1  2  3  4  5  6  7    range(M)
  fl  0  1  2  3  4 -3 -2 -1    np.fft.fftfreq(M, d=1/float(M))
  wl (0  1  2  3  4 -3 -2 -1)/M np.fft.fftfreq(M)
+\end{verbatim}
 
 So now our variables are  
 \begin{align}
@@ -112,10 +112,27 @@ def shift_f_real(f, shift):
         the realspace representation of fhats given f_norm.
     """
     fh      = np.fft.rfft(f)
-    ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) / float(f.shape[0]))
+    ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) \
+                     / float(f.shape[0]))
     f_shift = np.fft.irfft(fh * ramp)
     return f_shift
 
 \end{verbatim}
 
+
+This is going to get messy... What is:
+\begin{align}
+  \frac{\partial f_{i-\mu_m} }{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n} \left[ \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \right] 
+\end{align}
+
+Alright then... What is:
+\begin{align}
+  \frac{\partial}{\partial \hat{\mu}^r_n} e^{-2\pi i \mu_m w_j} &= -2 \pi i w_j  e^{-2\pi i \mu_m w_j} \frac{\partial \mu_m }{\partial \hat{\mu}^r_n}
+\end{align}
+
+Ok, fine. But what is:
+\begin{align}
+  \frac{\partial \mu_m }{\partial \hat{\mu}^r_n} &= \frac{\partial }{\partial \hat{\mu}^r_n} \frac{1}{M} \sum_{l=0}^{M-1} \hat{\mu}_l e^{2\pi i \frac{m l}{M}} \\
+  &= 
+\end{align}
 \end{document}
