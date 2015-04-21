@@ -27,7 +27,6 @@ def roll(a, x):
     b    = np.fft.ifft(A * ramp)
     return b
 
-
 def roll_real(a, x):
     """
     roll f by x pixels 
@@ -93,7 +92,7 @@ def shift_f_real(f, shift):
     Returns
     -------
     f_shift : 1d float array
-        the realspace representation of fhats given f_norm.
+        The shifted representation of f.
     """
     fh      = np.fft.rfft(f)
     ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) \
@@ -101,3 +100,27 @@ def shift_f_real(f, shift):
     f_shift = np.fft.irfft(fh * ramp)
     return f_shift
 
+
+def grad_shift_f_real(f, shift):
+    """
+    Apply the Fourier shift algorithm to f by shift pixels. 
+    In addition take the gradient of f.
+    
+    Parameters
+    ----------
+    f : float array
+        Real space values of f.
+    shift : float
+        The value in pixels of the shift amount.
+            
+    Returns
+    -------
+    f_shift : 1d float array
+        The gradient of the shifted representation of f.
+    """
+    fh      = np.fft.rfft(f)
+    lramp   = -2.0J * np.pi * np.arange(float(fh.shape[0])) \
+              / float(f.shape[0])
+    ramp    = lramp * np.exp(shift * lramp)
+    f_shift = np.fft.irfft(fh * ramp)
+    return f_shift

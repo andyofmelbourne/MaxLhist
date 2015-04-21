@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.stats
+import utils as ut
 
 def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.):
     """
@@ -23,19 +24,28 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.):
     F = scipy.stats.rv_discrete(name='background', values = (i, f))
     
     # the probability function for the offsets or "dark values"
-    shifts = np.arange(-100, 100, 1)
-    mu = np.exp( - shifts.astype(np.float64)**2 / (2. * sigma_mu**2)) 
+    """
+    shifts = np.arange(-100, 100, 0.1).astype(np.float)
+    shifts = shifts - np.sum(shifts) / float(shifts.size)
+    mu = np.exp( - shifts**2 / (2. * sigma_mu**2)) 
     mu = mu / np.sum(mu)
     MU = scipy.stats.rv_discrete(name='mu', values = (shifts, mu))
+    """
+    MU = scipy.stats.norm(loc = 0.0, scale = sigma_mu)
     
     # make some histograms
     hists = []
     mus = []
     for n in range(M):
-        mu = MU.rvs(1)
-        f  = F.rvs(size = 50)
-        hist, bins = np.histogram(f, bins = i)
-        hists.append(np.roll(hist, mu))
+        mu = MU.rvs(1)[0]
+        print mu
+
+        # create a new random variable with the shifted background
+        f_shift = ut.roll_real(f, mu)
+        F_shift = scipy.stats.rv_discrete(name='background', values = (i, f_shift))
+        ff = F_shift.rvs(size = 50)
+        hist, bins = np.histogram(ff, bins = i)
+        hists.append(hist)
         mus.append(mu)
     hists = np.array(hists)
     mus   = np.array(mus)
