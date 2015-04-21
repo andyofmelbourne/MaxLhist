@@ -4,6 +4,7 @@
 \title{\textbf{Finding adu distributions or finding photons}}
 \author{Andrew Morgan}
 \date{}
+\usepackage{graphicx}
 \begin{document}
 
 \maketitle
@@ -37,15 +38,18 @@ Our log likelihood error is:
 \end{align}
 with a minimum value of 0. 
 
-We could demand that the $\mu$'s are integer, so that shifting $f(i)$ is well defined. But this leads to problems in the minimization, since most refinement algorithms like a continuous set of variables and a continuous error function. Also we would expect that the shift of the distribution (or "dark value") at a pixel may not be an integer multiple of counts. 
 
-Another issue is that adding a constant to the mu's also corresponds to an overall shift in the probability distributions: mu + c <---> f(i - c). We can remove this redundancy by demanding that the sum of the mu's is equal to 0. This can be automatically satisfied if express the independent variables in Fourier space. Moving to Fourier space we have:
+\subsection{$\mu$ The offset's or dark values}
+We could demand that the $\mu$'s are integer, so that shifting $f(i)$ is well defined. But this leads to problems in the minimization, since most refinement algorithms like a continuous set of variables and a continuous error function. Also we would expect that the shift of the distribution (or ``dark value") at a pixel may not be an integer multiple of counts. 
+
+Another issue is that adding a constant to the mu's also corresponds to an overall shift in the probability distributions: $\mu + c \longleftrightarrow  f(i - c)$. We can remove this redundancy by demanding that the sum of the mu's is equal to 0. This can be automatically satisfied if we express the independent variables in Fourier space. Moving to Fourier space we have:
 
 \begin{align} 
-   \mu_m = \frac{1}{M} \sum_{l=0}^{M-1} \hat{\mu}_l e^{2\pi i \frac{m l}{M}}
+   \mu_m &= \frac{1}{M} \sum_{l=0}^{M-1} \hat{\mu}_l e^{2\pi i \frac{m l}{M}}, \\
+   &= \frac{1}{M} \sum_{f_l=-M/2 + 1}^{M/2} \hat{\mu}_{f_l} e^{2\pi i mw_l} 
 \end{align}
 
-Since mu is real the reciprocal space representation has Hermitian symmetry. To clear thing up lets define the discrete index $ l_f $ which maps $l$ to the Fourier frequency:
+Since $\mu$ is real the reciprocal space representation has Hermitian symmetry. That is, the negative Fourier frequencies are the complex conjugate of the positive Fourier frequencies. In the discrete Fourier transform one can interpret the first element as the zero frequency of $\mu$(which is useful because we can demand that this is zero), the first half of the array as the positive frequencies and the second half of the array as the negative frequencies. Because of this it is useful switch between the array index, $m$ in this case, and the Fourier index, $f_l$. Thankfully Python already has a function for doing this:
 
 \begin{verbatim}
  l   0  1  2  3  4  5  6  7    range(M)
@@ -53,13 +57,15 @@ Since mu is real the reciprocal space representation has Hermitian symmetry. To 
  wl (0  1  2  3  4 -3 -2 -1)/M np.fft.fftfreq(M)
 \end{verbatim}
 
-So now our variables are  
+So now, our independent values for $\mu$ are:
 \begin{align}
    \hat{\mu}_l \text{  for } l &= 1, 2, 3 .. M/2 + 1 \text{  where}\\
    \hat{\mu}_0 &= 0 \text{  and} \\
    \hat{\mu}_{l_f} &= \hat{\mu}^*_{-l_f}
 \end{align}
 
+\newpage
+Let's make a function that returns the real-space real function corresponding to the Fourier components givin by Eq. (6).
 \begin{verbatim}
 
 def make_f_real(fhats, f_norm = 0.0):
@@ -87,7 +93,7 @@ def make_f_real(fhats, f_norm = 0.0):
     
 \end{verbatim}
 
-The probability function f must also be normalized, but to 1. So it to, should expressed in Fourier space. Now we must define how the shift will happen. Using the Fourier shift theorem we have:
+The probability function f must also be normalized, but to 1. So it to should expressed in Fourier space. Now we must define how the shift will happen. Using the Fourier shift theorem we have:
 
 \begin{align}
 f_{i - \mu_m} = \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j}
@@ -109,7 +115,7 @@ def shift_f_real(f, shift):
     Returns
     -------
     f_shift : 1d float array
-        the realspace representation of fhats given f_norm.
+        The shifted representation of f.
     """
     fh      = np.fft.rfft(f)
     ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) \
@@ -119,20 +125,135 @@ def shift_f_real(f, shift):
 
 \end{verbatim}
 
+Now we know have to define the independent variables for the probability (or adu) distribution $f$, the shift variables (or dark values) $\mu$. We can also calculate the real space values and shift the probability function. 
 
-This is going to get messy... What is:
+If we want to refine the set of $\mu$ values using a gradient based method then we must calculate the gradients. We need to find the vector gradient of the log likelihood error with respect to the independent $\mu$-variables. 
+
+This is going to get messy... Let us try to evaluate the derivative with respect to the real part of the positive Fourier components of $\mu$ ($\hat{\mu}^r$). First we go down the derivative rabbit hole, then we clime our way back up: 
+
 \begin{align}
-  \frac{\partial f_{i-\mu_m} }{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n} \left[ \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \right] 
+   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n}\left[-\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))\right] \\
+   &=  -\sum_m^M \sum_i^I h^m_i \frac{\partial}{\partial \hat{\mu}^r_n} \ln(f(i - \mu_m)) \\
+   &=  -\sum_m^M \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial f(i - \mu_m)}{\partial \hat{\mu}^r_n}
 \end{align}
 
-Alright then... What is:
+
+Fine, now need to evaluate the final term:
 \begin{align}
-  \frac{\partial}{\partial \hat{\mu}^r_n} e^{-2\pi i \mu_m w_j} &= -2 \pi i w_j  e^{-2\pi i \mu_m w_j} \frac{\partial \mu_m }{\partial \hat{\mu}^r_n}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n} \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \\
+   &= \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \left[-2\pi i w_j \frac{\partial \mu_m}{\partial \hat{\mu}^r_n} \right]
 \end{align}
 
-Ok, fine. But what is:
+
+OK, and the last term again:
 \begin{align}
-  \frac{\partial \mu_m }{\partial \hat{\mu}^r_n} &= \frac{\partial }{\partial \hat{\mu}^r_n} \frac{1}{M} \sum_{l=0}^{M-1} \hat{\mu}_l e^{2\pi i \frac{m l}{M}} \\
-  &= 
+   \frac{\partial \mu_m}{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n} \left[\frac{1}{M} \sum_{f_l=-M/2 + 1}^{M/2} \hat{\mu}^r e^{2\pi i mw_l} \right] \\ 
+   &= \frac{1}{M} \sum_{f_l=-M/2 + 1}^{M/2} \frac{\partial \hat{\mu}^r_{f_l}}{\partial \hat{\mu}^r_n} e^{2\pi i mw_l} 
 \end{align}
+
+
+We have to be carefull here. Remember that $\hat{\mu}$ is Hermitian, so not all of the $\hat{\mu}^r$ are independent:
+\begin{align}
+   \frac{\partial \mu_m}{\partial \hat{\mu}^r_n} &= \frac{1}{M} \sum_{f_l=-M/2 + 1}^{-1} \delta_{f_n + f_l} e^{2\pi i mw_l} + \frac{1}{M} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} e^{2\pi i mw_l} \\
+   &+ \frac{1}{M} \delta_{f_n - 0} + \frac{1}{M} \delta_{f_n - M/2} e^{\pi i m} \\
+   &= \frac{1}{M} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} \left[e^{-2\pi i mw_n} + e^{2\pi i mw_n} \right] + \frac{1}{M} \delta_{f_n - 0} + \frac{1}{M} \delta_{f_n - M/2} (-1)^m\\
+   &= \frac{2}{M} \cos(2\pi mw_n) \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} + \frac{1}{M}\left(\delta_{f_n - 0} +  (-1)^m \delta_{f_n - M/2} \right)
+\end{align}
+
+Notice those two extra anoying bits on the right? Well we don't have to worry about $n = 0$ because are keeping the $\mu$ values normalised to 0, but that $(-1)^m$ comes about when the array dimensions are even. Hmmm... I guess we should keep M even for now but I am sure it cannot be that hard to work out the odd case. 
+
+\pagebreak
+While we are here I guess we should look at the derivative with respect to $\hat{\mu}^i$:
+\begin{align}
+   \frac{\partial \mu_m}{\partial \hat{\mu}^i_n} &= -\frac{i}{M} \sum_{f_l=-M/2 + 1}^{-1} \delta_{f_n + f_l} e^{2\pi i mw_l} + \frac{i}{M} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} e^{2\pi i mw_l} \\
+   &= \frac{1}{M} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} \left[-ie^{-2\pi i mw_n} + ie^{2\pi i mw_n} \right] \\
+   &= -\frac{2}{M} \sin(2\pi mw_n) \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} 
+\end{align}
+
+We can bring the real and imaginary parts together:
+\begin{align}
+   \frac{\partial \mu_m}{\partial \hat{\mu}_n} &\equiv \frac{\partial \mu_m}{\partial \hat{\mu}^r_n} + i \frac{\partial \mu_m}{\partial \hat{\mu}^i_n} \\
+   &= \frac{2}{M} \left[\cos(2\pi mw_n) - i\sin(2\pi mw_n)\right] \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} \\
+   &+ \frac{1}{M}\left(\delta_{f_n - 0} +  (-1)^m \delta_{f_n - M/2} \right) \\
+   &= \frac{2}{M} e^{-2\pi i m w_n} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} + \frac{1}{M}\left(\delta_{f_n - 0} +  (-1)^m \delta_{f_n - M/2} \right)
+\end{align}
+
+As an aside, one can view the two dimensional matrix in Eq. (27) as a discrete cosine transformation matrix of the first kind http://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.fftpack.dct.html (after multiplying by M).
+
+At this point we are at the bottom of the rabitt hole. And remember that it is easier to go down than up! 
+
+Put Eq. (27) back into Eq. (14):
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{\mu}_n} &= \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \left[-2\pi i w_j \frac{\partial \mu_m}{\partial \hat{\mu}_n} \right] \\
+   &= \frac{\partial \mu_m}{\partial \hat{\mu}_n} \frac{1}{I} \sum_{j=0}^{I-1} (-2\pi i w_j \hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} 
+\end{align}
+
+
+There are three essensial parts to Eq. (22) first is the derivative term $\frac{\partial \mu_m}{\partial \hat{\mu}_n}$ which is a two dimensional function outside of the sum. The second is the multimplication (inside the sum) by $e^{-2\pi i \mu_m w_j}$ which as we already know has the effect of shifting $f$ in real space by $\mu_m$. The final part is the multiplication by $-2\pi i w_j$, in real space this is like taking the spatial derivative of $f$. As the second and third parts commute (they are both multiplications in Fourier space) I will define their effect with this notation:
+\begin{align}
+   f'_i &\equiv \frac{1}{I} \sum_{j=0}^{I-1} -2\pi i w_j \hat{f}_j e^{2\pi i i w_j} \\
+   f'_{i-\mu_m} &\equiv \frac{1}{I} \sum_{j=0}^{I-1} (-2\pi i w_j \hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} 
+\end{align}
+
+\begin{verbatim}
+
+def grad_shift_f_real(f, shift):
+    """
+    Apply the Fourier shift algorithm to f by shift pixels. 
+    In addition take the gradient of f.
+    
+    Parameters
+    ----------
+    f : float array
+        Real space values of f.
+    shift : float
+        The value in pixels of the shift amount.
+            
+    Returns
+    -------
+    f_shift : 1d float array
+        The gradient of the shifted representation of f.
+    """
+    fh      = np.fft.rfft(f)
+    lramp   = -2.0J * np.pi * np.arange(float(fh.shape[0])) \
+              / float(f.shape[0])
+    ramp    = lramp * np.exp(shift * lramp)
+    f_shift = np.fft.irfft(fh * ramp)
+    return f_shift
+
+\end{verbatim}
+
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.50]{/home/amorgan/Physics/git_repos/MaxLhist/shifted_gradient.png}
+\caption{Example of the shifted gradient of a gaussian. Using grad\_shift\_f\_real.}
+\label{shifted_grad}
+\end{figure}
+
+
+With that done, I will use the notation from Eq. (31) to express the derivative of the probability function with respect to the real and imaginary components of the Fourier spectrum of the shift values:
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{\mu}_n} &=  \frac{\partial \mu_m}{\partial \hat{\mu}_n} \times f'_{i-\mu_m}
+\end{align}
+
+
+Now we can go back to Eq. (12):
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}_n} &= -\sum_m^M \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial \mu_m}{\partial \hat{\mu}_n} \times f'_{i-\mu_m} \\
+   &= -\sum_m^M  \frac{\partial \mu_m}{\partial \hat{\mu}_n} \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \times f'_{i-\mu_m}
+\end{align}
+
+
+As it stands we have function of $i$ (the adu values) and $m$ (the pixel numbers) just before the sum over the adu values. Then we have a transform from $m\rightarrow n$, where the transform matrix is given by $\frac{\partial \mu_m}{\partial \hat{\mu}_n}$ which is independant of the model and the data. So what does this transform look like?
+\begin{align}
+   g_n &= \sum_{m=0}^{M-1} \left[ \frac{2}{M} e^{-2\pi i m w_n} \sum_{f_l=1}^{M/2-1} \delta_{f_n - f_l} + \frac{1}{M}\left(\delta_{f_n - 0} +  (-1)^m \delta_{f_n - M/2} \right) \right] \times h_m
+\end{align}
+
+This is rather strange, note that the transform sums over $m$ not $n$, so it does not reduce to the discrete cosine transform of the first kind. Regardless, 
+\begin{align}
+   g_n &= \frac{1}{M} \sum_{m=0}^{M-1} h_m                      &&\text{for } n = 0 \\
+   &= \frac{2}{M} \sum_{m=0}^{M-1} e^{-2\pi i m w_n} \times h_m &&\text{for } 0 < n < \frac{M}{2} \\
+   &= \frac{1}{M} \sum_{m=0}^{M-1} (-1)^m h_m                   &&\text{for } n = \frac{M}{2}
+\end{align}
+
 \end{document}
