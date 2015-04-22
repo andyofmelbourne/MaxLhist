@@ -124,3 +124,45 @@ def grad_shift_f_real(f, shift):
     ramp    = lramp * np.exp(shift * lramp)
     f_shift = np.fft.irfft(fh * ramp)
     return f_shift
+
+
+def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
+    """
+    Calculate the log likelihood error given a probability distribution f,
+    a set of shifts mus, the measured histograms for each shift hists.
+    
+    log likelihood error = - sum_m sum_I hists[m, I] * ln( f[i-mus[m]] )
+        
+    As the pixel shifts need not be integer f[i-mus[m]] is calculated
+    using the Fourier shift theorem and uses the function shift_f_real.
+    
+    Parameters
+    ----------
+    f : float array
+        Real space values of f of length I.
+    mus : float array
+        The value in pixels of the shift amount of length M.
+    hists : 2 dimensional integer array
+        The measured values sampled from f shifted by the mus.
+        hists must have the shape (M, I).
+    prob_tol : float, optional
+        Amount to add to f to aviod -infinity in the natural logarithm.
+            
+    Returns
+    -------
+    log_likelihood_error : float
+        The log likelihood error.
+    """
+    error = 0.0
+    for m in range(len(hists)):
+        # only look at adu or pixel values that were detected on this pixel
+        Is = np.where(hists[m] > 0)
+        
+        # evaluate the shifted probability function
+        fs = roll_real(f, mus[m])[Is] 
+
+        # sum the log liklihood errors for this pixel
+        e  = hists[m, Is] * np.log(prob_tol + fs)
+        error += np.sum(e)
+    return -error
+

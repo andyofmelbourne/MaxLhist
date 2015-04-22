@@ -8,21 +8,6 @@ import scipy.stats
 import forward_model as fm
 import utils as ut
 
-# error metric
-def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
-    error = 0.0
-    for m in range(len(hists)):
-        # only look at adu or pixel values that were detected on this pixel
-        Is = np.where(hists[m] > 0)
-        
-        # evaluate the shifted probability function
-        fs = ut.roll_real(f, mus[m])[Is] 
-
-        # sum the log liklihood errors for this pixel
-        e  = hists[m, Is] * np.log(prob_tol + fs)
-        error += np.sum(e)
-    return -error
-
 # jacobian
 def jacobian_mus_manual_calc(f, mus, hists, error_func):
     """
@@ -48,7 +33,23 @@ def jacobian_mus_manual_calc(f, mus, hists, error_func):
         J_mus[i] = d
     return J_mus
 
-def jacobian_mus_calc(f, mus, hists, prob_tol = 0.0e-5, continuity = 0):
+def jacobian_mus_calc_old(f, mus, hists, prob_tol = 0.0e-5, continuity = 0):
+    out = np.zeros_like(mus, dtype=np.float64)
+    
+    # calculate the derivative of f
+    fprime = np.gradient(f)
+    if continuity != 0 :
+        fprime = np.convolve(fprime, np.ones((continuity), dtype=np.float)/ float(continuity), mode='same')
+    
+    for n in range(len(hists)) :
+        Is      = np.where(hists[n] > 0)[0]
+        fs      = f[Is - int(np.rint(mus[n]))]
+        fprimes = fprime[Is - int(np.rint(mus[n]))]
+        
+        out[n] = np.sum(hists[n, Is] * fprimes / (fs + prob_tol))
+    return out
+
+def jacobian_mus_calc(f, mus, hists, prob_tol = 0.0, continuity = 0):
     out = np.zeros_like(mus, dtype=np.float64)
     
     # calculate the derivative of f
@@ -73,7 +74,7 @@ def update_mus(f, mus0, hists, grad_calc, iters = 1):
     mus = mus0.copy()
     for i in range(iters):
         # print the error
-        print i, 'log likelihood error', log_likelihood_calc(f, mus, hists)
+        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists)
 
         # calculate the gradient
         grad = grad_calc(f, mus, hists)
@@ -95,10 +96,10 @@ for m in range(hists.shape[0]):
 
 # update the guess
 #mus = update_mus(f, mus0, hists, jacobian_mus_calc, iters=10)
-mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,log_likelihood_calc), iters=10)
+mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=10)
 
 # derivates
-J_mus_manual = jacobian_mus_manual_calc(f, mus, hists, log_likelihood_calc)
+J_mus_manual = jacobian_mus_manual_calc(f, mus, hists, ut.log_likelihood_calc)
 J_mus_calc   = jacobian_mus_calc(f, mus, hists)
 
 hists0 = fm.forward_hists(f, mus.astype(np.int), np.sum(hists[0]))
