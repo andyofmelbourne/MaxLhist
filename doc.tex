@@ -39,6 +39,51 @@ Our log likelihood error is:
 with a minimum value of 0. 
 
 
+\begin{verbatim}
+
+def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
+    """
+    Calculate the log likelihood error given a probability distribution f,
+    a set of shifts mus, the measured histograms for each shift hists.
+    
+    log likelihood error = - sum_m sum_I hists[m, I] * ln( f[i-mus[m]] )
+        
+    As the pixel shifts need not be integer f[i-mus[m]] is calculated
+    using the Fourier shift theorem and uses the function roll_real.
+    
+    Parameters
+    ----------
+    f : float array
+        Real space values of f of length I.
+    mus : float array
+        The value in pixels of the shift amount of length M.
+    hists : 2 dimensional integer array
+        The measured values sampled from f shifted by the mus.
+        hists must have the shape (M, I).
+    prob_tol : float, optional
+        Amount to add to f to aviod -infinity in the natural logarithm.
+            
+    Returns
+    -------
+    log_likelihood_error : float
+        The log likelihood error.
+    """
+    error = 0.0
+    for m in range(len(hists)):
+        # only look at adu or pixel values that were detected on this pixel
+        Is = np.where(hists[m] > 0)
+        
+        # evaluate the shifted probability function
+        fs = roll_real(f, mus[m])[Is] 
+
+        # sum the log liklihood errors for this pixel
+        e  = hists[m, Is] * np.log(prob_tol + fs)
+        error += np.sum(e)
+    return -error
+
+
+\end{verbatim}
+
 \subsection{$\mu$ The offset's or dark values}
 We could demand that the $\mu$'s are integer, so that shifting $f(i)$ is well defined. But this leads to problems in the minimization, since most refinement algorithms like a continuous set of variables and a continuous error function. Also we would expect that the shift of the distribution (or ``dark value") at a pixel may not be an integer multiple of counts. 
 
@@ -223,13 +268,14 @@ def grad_shift_f_real(f, shift):
 
 \end{verbatim}
 
+\iffalse
 \begin{figure}[htp]
 \centering
 \includegraphics[scale=0.50]{/home/amorgan/Physics/git_repos/MaxLhist/shifted_gradient.png}
 \caption{Example of the shifted gradient of a gaussian. Using grad\_shift\_f\_real.}
 \label{shifted_grad}
 \end{figure}
-
+\fi
 
 With that done, I will use the notation from Eq. (31) to express the derivative of the probability function with respect to the real and imaginary components of the Fourier spectrum of the shift values:
 \begin{align}
@@ -255,5 +301,38 @@ This is rather strange, note that the transform sums over $m$ not $n$, so it doe
    &= \frac{2}{M} \sum_{m=0}^{M-1} e^{-2\pi i m w_n} \times h_m &&\text{for } 0 < n < \frac{M}{2} \\
    &= \frac{1}{M} \sum_{m=0}^{M-1} (-1)^m h_m                   &&\text{for } n = \frac{M}{2}
 \end{align}
+
+\pagebreak
+\begin{verbatim}
+
+def mu_transform(h):
+    """
+    Calculate a strange transform. So far only works
+    when h.shape[0] is an even number (and h is 1D).
+    Note that in the output n = 0 is excluded.
+	
+    g[n] = 1/M sum_m=0^M-1 h[m]                         for n = 0
+    g[n] = 2/M sum_m=0^M-1 e^(-2 pi i m n / M) h[m]     for 0 < n < M/2
+    g[n] = 1/M sum_m=0^M-1 (-1)^m h[m]                  for n = M/2
+    
+    Parameters
+    ----------
+    h : 1D float array
+        Values of h of length M.
+            
+    Returns
+    -------
+    g : 1D complex array
+        g for n = 1, ..., M/2, so with the shape M/2 
+    """
+    if h.shape[0] % 2 == 1 :
+        raise ValueError('input array shape must even for now')
+    g = np.zeros((h.shape[0] / 2, ), dtype = np.complex128)
+    
+    #g[0]     = np.sum(h) / float(M)
+    g[1 : -1] = np.fft.fft(h)[1 : M/2] * 2. / float(M)
+    g[-1]     = np.sum(h * (-1)**np.arange(h.shape[0]) ) / float(M)
+    return g
+\end{verbatim}
 
 \end{document}

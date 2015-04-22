@@ -16,7 +16,8 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.):
     And a ploting funciton to look at the data
     """
     # the "adu" range
-    i = np.arange(0, I, 1)
+    i      = np.arange(0, I, 1)
+    i_bins = np.arange(0, I+1, 1)
     
     # the probability function or "background"
     f = np.exp( - (i - 100).astype(np.float64)**2 / (2. * sigma_f**2)) 
@@ -44,7 +45,7 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.):
         f_shift = ut.roll_real(f, mu)
         F_shift = scipy.stats.rv_discrete(name='background', values = (i, f_shift))
         ff = F_shift.rvs(size = 50)
-        hist, bins = np.histogram(ff, bins = i)
+        hist, bins = np.histogram(ff, bins = i_bins)
         hists.append(hist)
     hists = np.array(hists)
     mus   = np.array(mus)

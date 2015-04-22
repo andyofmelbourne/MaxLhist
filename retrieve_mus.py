@@ -9,7 +9,7 @@ import forward_model as fm
 import utils as ut
 
 # jacobian
-def jacobian_mus_manual_calc(f, mus, hists, error_func):
+def jacobian_mus_manual_calc(f, mus, hists, error_func, step = 0.1):
     """
     Calculate d error / d mus using the central difference algorithm:
     d error / d mus_i = [error(mus_i + 1) - error(mus_i - 1)] / 2
@@ -21,19 +21,19 @@ def jacobian_mus_manual_calc(f, mus, hists, error_func):
     J_mus = np.zeros_like(mus, dtype=np.float64)
     for i in range(len(mus)):
         mus_temp     = mus
-        mus_temp[i] += 0.1
+        mus_temp[i] += step
         e1 = error_func(f, mus_temp, hists)
         
         mus_temp     = mus
-        mus_temp[i] -= 0.1
+        mus_temp[i] -= step
         e2 = error_func(f, mus_temp, hists)
         
-        d = (e1 - e2) / (2. * 0.1)
+        d = (e1 - e2) / (2. * step)
         
         J_mus[i] = d
     return J_mus
 
-def jacobian_mus_calc_old(f, mus, hists, prob_tol = 0.0e-5, continuity = 0):
+def jacobian_mus_calc_old(f, mus, hists, prob_tol = 1.0e-5, continuity = 0):
     out = np.zeros_like(mus, dtype=np.float64)
     
     # calculate the derivative of f
@@ -49,21 +49,17 @@ def jacobian_mus_calc_old(f, mus, hists, prob_tol = 0.0e-5, continuity = 0):
         out[n] = np.sum(hists[n, Is] * fprimes / (fs + prob_tol))
     return out
 
-def jacobian_mus_calc(f, mus, hists, prob_tol = 0.0, continuity = 0):
-    out = np.zeros_like(mus, dtype=np.float64)
+def jacobian_mus_calc(f, mus, hists, prob_tol = 0.0):
+    # this could be more efficient
+    f_prime_shift = np.zeros_like(hists, dtype=np.float64)
+    for m in range(len(mus)) :
+        f_prime_shift = ut.grad_shift_f_real(f, mus[m]) / (prob_tol + ut.roll_real(f, mus[m]))
     
-    # calculate the derivative of f
-    fprime = np.gradient(f)
-    if continuity != 0 :
-        fprime = np.convolve(fprime, np.ones((continuity), dtype=np.float)/ float(continuity), mode='same')
-    
-    for n in range(len(hists)) :
-        Is      = np.where(hists[n] > 0)[0]
-        fs      = f[Is - int(np.rint(mus[n]))]
-        fprimes = fprime[Is - int(np.rint(mus[n]))]
-        
-        out[n] = np.sum(hists[n, Is] * fprimes / (fs + prob_tol))
-    return out
+    temp  = hists * f_prime_shift 
+    temp  = np.sum(temp, axis=1)
+    mus_f = ut.mu_transform(temp)
+    mus_d = ut.make_f_real(mus_f, f_norm = 0.0)
+    return mus_d
 
 # update
 def update_mus(f, mus0, hists, grad_calc, iters = 1):

@@ -134,7 +134,7 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
     log likelihood error = - sum_m sum_I hists[m, I] * ln( f[i-mus[m]] )
         
     As the pixel shifts need not be integer f[i-mus[m]] is calculated
-    using the Fourier shift theorem and uses the function shift_f_real.
+    using the Fourier shift theorem and uses the function roll_real.
     
     Parameters
     ----------
@@ -166,3 +166,33 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
         error += np.sum(e)
     return -error
 
+
+def mu_transform(h):
+    """
+    Calculate a strange transform. So far only works
+    when h.shape[0] is an even number (and h is 1D).
+    Note that in the output n = 0 is excluded.
+    
+    g[n] = 1/M sum_m=0^M-1 h[m]                         for n = 0
+    g[n] = 2/M sum_m=0^M-1 e^(-2 pi i m n / M) h[m]     for 0 < n < M/2
+    g[n] = 1/M sum_m=0^M-1 (-1)^m h[m]                  for n = M/2
+    
+    Parameters
+    ----------
+    h : 1D float array
+        Values of h of length M.
+            
+    Returns
+    -------
+    g : 1D complex array
+        g for n = 1, ..., M/2, so with the shape M/2 
+    """
+    M = h.shape[0]
+    if M % 2 == 1 :
+        raise ValueError('input array shape must even for now')
+    g = np.zeros((h.shape[0] / 2, ), dtype = np.complex128)
+    
+    #g[0]     = np.sum(h) / float(M)
+    g[0 : -1] = np.fft.fft(h)[1 : M/2] * 2. / float(M)
+    g[-1]     = np.sum(h * (-1)**np.arange(h.shape[0]) ) / float(M)
+    return g
