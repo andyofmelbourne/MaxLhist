@@ -35,18 +35,17 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.):
     
     # make some histograms
     hists = []
-    mus = []
+    mus = MU.rvs(M)
+    mus = mus - np.mean(mus)
     for n in range(M):
-        mu = MU.rvs(1)[0]
-        print mu
-
+        mu = mus[n]
+        
         # create a new random variable with the shifted background
         f_shift = ut.roll_real(f, mu)
         F_shift = scipy.stats.rv_discrete(name='background', values = (i, f_shift))
         ff = F_shift.rvs(size = 50)
         hist, bins = np.histogram(ff, bins = i)
         hists.append(hist)
-        mus.append(mu)
     hists = np.array(hists)
     mus   = np.array(mus)
     
