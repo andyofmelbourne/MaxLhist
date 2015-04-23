@@ -79,62 +79,62 @@ def update_mus(f, mus0, hists, grad_calc, iters = 1):
         mus = mus - 0.5 * grad
     return mus
 
+if __name__ == '__main__':
+    # forward model 
+    hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.)
 
-# forward model 
-hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.)
+    # inital guess
+    f      = F.pmf(np.arange(I))
 
-# inital guess
-f      = F.pmf(np.arange(I))
+    mus0   = np.zeros_like(mus_god) 
+    #for m in range(hists.shape[0]):
+    #    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
 
-mus0   = np.zeros_like(mus_god) 
-#for m in range(hists.shape[0]):
-#    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
+    # update the guess
+    mus = update_mus(f, mus0, hists, jacobian_mus_calc, iters=100)
+    #mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=100)
+    #mus = mus0
 
-# update the guess
-mus = update_mus(f, mus0, hists, jacobian_mus_calc, iters=100)
-#mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=100)
-#mus = mus0
+    # derivates
+    J_mus_manual = jacobian_mus_manual_calc(f, mus, hists, ut.log_likelihood_calc)
+    J_mus_calc   = jacobian_mus_calc(f, mus, hists)
 
-# derivates
-J_mus_manual = jacobian_mus_manual_calc(f, mus, hists, ut.log_likelihood_calc)
-J_mus_calc   = jacobian_mus_calc(f, mus, hists)
-
-hists0 = fm.forward_hists(f, mus0, np.sum(hists[0]))
-hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
+    hists0 = fm.forward_hists(f, mus0, np.sum(hists[0]))
+    hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
 
 
-# display
-if True :
-    import pyqtgraph as pg
-    import PyQt4.QtGui
-    import PyQt4.QtCore
-    # Always start by initializing Qt (only once per application)
-    app = PyQt4.QtGui.QApplication([])
-    # Define a top-level widget to hold everything
-    win = pg.GraphicsWindow(title="forward model")
-    pg.setConfigOptions(antialias=True)
-    
-    # show f and the mu values
-    p1 = win.addPlot(title="probablity function", x = np.arange(I), y = F.pmf(np.arange(I)), name = 'f')
-    
-    p2 = win.addPlot(title="shifts", y = mus_god, name = 'shifts')
-    p2.plot(mus0, pen=(255, 0, 0), name = 'mus0')
-    p2.plot(mus, pen=(0, 255, 0), name = 'mus')
-    
-    win.nextRow()
-    
-    p2 = win.addPlot(title="shifts jacobian", y = J_mus_manual, name = 'shifts jacobian')
-    p2.plot(J_mus_calc, pen=(255, 0, 0))
-    
-    win.nextRow()
-
-    # now plot the histograms
-    hplots = []
-    for i in range(M / 2):
-        for j in range(2):
-            m = 2 * i + j
-            hplots.append(win.addPlot(title="histogram pixel " + str(m), y = hists[m], name = 'hist' + str(m)))
-            hplots[-1].plot(hists0[m], pen = (255, 0, 0))
-            hplots[-1].plot(hists1[m], pen = (0, 255, 0))
-            hplots[-1].setXLink('f')
+    # display
+    if True :
+        import pyqtgraph as pg
+        import PyQt4.QtGui
+        import PyQt4.QtCore
+        # Always start by initializing Qt (only once per application)
+        app = PyQt4.QtGui.QApplication([])
+        # Define a top-level widget to hold everything
+        win = pg.GraphicsWindow(title="forward model")
+        pg.setConfigOptions(antialias=True)
+        
+        # show f and the mu values
+        p1 = win.addPlot(title="probablity function", x = np.arange(I), y = F.pmf(np.arange(I)), name = 'f')
+        
+        p2 = win.addPlot(title="shifts", y = mus_god, name = 'shifts')
+        p2.plot(mus0, pen=(255, 0, 0), name = 'mus0')
+        p2.plot(mus, pen=(0, 255, 0), name = 'mus')
+        
         win.nextRow()
+        
+        p2 = win.addPlot(title="shifts jacobian", y = J_mus_manual, name = 'shifts jacobian')
+        p2.plot(J_mus_calc, pen=(255, 0, 0))
+        
+        win.nextRow()
+
+        # now plot the histograms
+        hplots = []
+        for i in range(M / 2):
+            for j in range(2):
+                m = 2 * i + j
+                hplots.append(win.addPlot(title="histogram pixel " + str(m), y = hists[m], name = 'hist' + str(m)))
+                hplots[-1].plot(hists0[m], pen = (255, 0, 0))
+                hplots[-1].plot(hists1[m], pen = (0, 255, 0))
+                hplots[-1].setXLink('f')
+            win.nextRow()
