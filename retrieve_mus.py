@@ -49,17 +49,17 @@ def jacobian_mus_calc_old(f, mus, hists, prob_tol = 1.0e-5, continuity = 0):
         out[n] = np.sum(hists[n, Is] * fprimes / (fs + prob_tol))
     return out
 
-def jacobian_mus_calc(f, mus, hists, prob_tol = 0.0):
+def jacobian_mus_calc(f, mus, hists, prob_tol = 1.0e-10):
     # this could be more efficient
     f_prime_shift = np.zeros_like(hists, dtype=np.float64)
     for m in range(len(mus)) :
-        f_prime_shift = ut.grad_shift_f_real(f, mus[m]) / (prob_tol + ut.roll_real(f, mus[m]))
+        f_prime_shift[m] = ut.grad_shift_f_real(f, mus[m]) / (prob_tol + ut.roll_real(f, mus[m]))
     
     temp  = hists * f_prime_shift 
     temp  = np.sum(temp, axis=1)
     mus_f = ut.mu_transform(temp)
     mus_d = ut.make_f_real(mus_f, f_norm = 0.0)
-    return mus_d
+    return -mus_d
 
 # update
 def update_mus(f, mus0, hists, grad_calc, iters = 1):
@@ -70,7 +70,7 @@ def update_mus(f, mus0, hists, grad_calc, iters = 1):
     mus = mus0.copy()
     for i in range(iters):
         # print the error
-        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists)
+        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists), np.array(mus, dtype=np.int)
 
         # calculate the gradient
         grad = grad_calc(f, mus, hists)
@@ -87,18 +87,20 @@ hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 10, sigma_f = 5., sigma_
 f      = F.pmf(np.arange(I))
 
 mus0   = np.zeros_like(mus_god) 
-for m in range(hists.shape[0]):
-    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
+#for m in range(hists.shape[0]):
+#    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
 
 # update the guess
-#mus = update_mus(f, mus0, hists, jacobian_mus_calc, iters=10)
-mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=10)
+mus = update_mus(f, mus0, hists, jacobian_mus_calc, iters=100)
+#mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=100)
+#mus = mus0
 
 # derivates
 J_mus_manual = jacobian_mus_manual_calc(f, mus, hists, ut.log_likelihood_calc)
 J_mus_calc   = jacobian_mus_calc(f, mus, hists)
 
-hists0 = fm.forward_hists(f, mus.astype(np.int), np.sum(hists[0]))
+hists0 = fm.forward_hists(f, mus0, np.sum(hists[0]))
+hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
 
 
 # display
@@ -133,5 +135,6 @@ if True :
             m = 2 * i + j
             hplots.append(win.addPlot(title="histogram pixel " + str(m), y = hists[m], name = 'hist' + str(m)))
             hplots[-1].plot(hists0[m], pen = (255, 0, 0))
+            hplots[-1].plot(hists1[m], pen = (0, 255, 0))
             hplots[-1].setXLink('f')
         win.nextRow()

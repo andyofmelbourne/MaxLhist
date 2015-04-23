@@ -335,4 +335,30 @@ def mu_transform(h):
     return g
 \end{verbatim}
 
+
+
+
+
+\subsection{example}
+Let's see if this actually works. As an example we will start with a simple problem where the adu distribution is a gaussian, with a sigma of 5 adus centered on 100 adus:
+\begin{align}
+   f(i) &= \frac{1}{\sigma \sqrt{2\pi}} e^{- \frac{(x - \mu)^2}{2\sigma^2}} \\
+        &= \frac{1}{5 \sqrt{2\pi}} e^{- \frac{(x - 100)^2}{2\times 25}}
+\end{align}
+
+Where $\mu$ in Eq. 39 is the mean of $f$ not the shift coordinates. The real space shift coordinates are (say) -20 and 20 adus (remember that their sum must be 0):
+\begin{align}
+   \mu       &= [\mu_0, \mu_1] = [-20, 20] \\
+   \hat{\mu} &= [\hat{\mu_0}, \hat{\mu}_1] = [0 + 0i, -40 + 0i]
+\end{align}
+here we can see that, as expected, there is only one non-zero value (-40) which is our single unknown variable in this retrieval.
+
+Now we do an experiment for (say) 1000 shots, our data looks like:
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.40]{figure_1.png}
+\caption{adu histogram of two pixels}
+\label{data}
+\end{figure}
 \end{document}
+
