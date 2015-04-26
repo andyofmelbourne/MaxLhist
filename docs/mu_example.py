@@ -5,6 +5,8 @@ from MaxLhist import utils as ut
 from MaxLhist import forward_model as fm
 from MaxLhist.retrieve_mus import jacobian_mus_manual_calc
 
+from cgls.cgls import line_search_secant
+
 import matplotlib.pyplot as plt
 import scipy
 import numpy as np
@@ -131,7 +133,7 @@ if False :
 
 
 # plot the line and the error
-if True :
+if False :
     ax = plt.subplot(111)
     ax.plot(mhs, errors, alpha = 0.8, color='k', label='log likelihood error')
     ax.plot(mhs, grad_line, alpha = 0.8, color='b', label='tangent line for mhat = 0')
@@ -141,4 +143,10 @@ if True :
     ax.set_ylim([errors.min() * 0.7, errors.max() * 1.1])
     ax.legend()
     plt.show()
+
+# perform a secant line search
+x = np.array([0.])
+d = de_dmu
+fd = lambda fprime, d : 
+x, t = line_search_secant([0.], d, fd, iters = 1, sigma = 1.0e-3, tol=1.0e-10):
 
