@@ -287,6 +287,7 @@ Now we can go back to Eq. (12):
 \begin{align}
    \frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}_n} &= -\sum_m^M \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial \mu_m}{\partial \hat{\mu}_n} \times f'_{i-\mu_m} \\
    &= -\sum_m^M  \frac{\partial \mu_m}{\partial \hat{\mu}_n} \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \times f'_{i-\mu_m}
+   \label{mu_grad}
 \end{align}
 
 
@@ -356,9 +357,27 @@ here we can see that, as expected, there is only one non-zero value (-40) which 
 Now we do an experiment for (say) 1000 shots, our data looks like:
 \begin{figure}[htp]
 \centering
-\includegraphics[scale=0.40]{figure_1.png}
+\includegraphics[scale=0.50]{figure_1.png}
 \caption{adu histogram of two pixels}
 \label{data}
 \end{figure}
+
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.50]{figure_3.png}
+\caption{log likelyhood error with a tolerance of $10^{-10}$.}
+\label{error}
+\end{figure}
+Now let's look at the error as a function of $\hat{\mu}_1^r$ in Fig. \ref{error}. The good thing is that the error seems nice and quadratic near the correct value of $\hat{\mu}_1^r$ (-40) however we can also see that the error levels out at larger or lower values. This is due to rounding errors in the natural logarithm, when evaluating the error metric. Basically, if our initial guess for the $\mu$ values is inside the flat region then we are screwed.
+
+Also shown are the tangent lines for $\hat{\mu}^r_1 = 0$ and $-40$, calculated using Eq. (\ref{mu_grad}) which look resonable. Note that we do not expect the gradient at the correct solution (-40) to be zero, this is because we do not have perfect statistics of the function $f$ in the histograms.
+
+
+
+
+
+
+
+
 \end{document}
 
