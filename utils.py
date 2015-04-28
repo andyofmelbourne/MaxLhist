@@ -126,7 +126,7 @@ def grad_shift_f_real(f, shift):
     return f_shift
 
 
-def log_likelihood_calc(f, mus, hists, prob_tol = 0.0):
+def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
     """
     Calculate the log likelihood error given a probability distribution f,
     a set of shifts mus, the measured histograms for each shift hists.
