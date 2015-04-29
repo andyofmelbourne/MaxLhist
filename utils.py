@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 
 def roll(a, x):
     """
@@ -248,4 +249,30 @@ def muextended_to_mu(mu_extended, norm = 0.0):
     muhat[1 : -1].imag= mu_extended[N/2 : ]
     mu                = np.fft.irfft(muhat)
     return mu
+
+def mu_bisection(f_alpha, min_step = 1.):
+    # find a and b
+    a = 0.0
+    b = min_step
+    fa = f_alpha(a)
+    while fa * f_alpha(b) > 0 :
+        b = 2 * b
+    x0, r = scipy.optimize.bisect(f_alpha, a, b, xtol=1e-2, rtol=4.4408920985006262e-16, maxiter=100, full_output=True, disp=True)
+    return x0
+
+def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
+    jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
+    return np.sum((jacobian * np.conj(d)).real)
+
+def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
+    mus = make_f_real(mushat)
+    # this could be more efficient
+    f_prime_shift = np.zeros_like(hists, dtype=np.float64)
+    for m in range(len(mus)) :
+        f_prime_shift[m] = grad_shift_f_real(f, mus[m]) / (prob_tol + roll_real(f, mus[m]))
+    
+    temp  = hists * f_prime_shift 
+    temp  = np.sum(temp, axis=1)
+    mus_f = mu_transform(temp)
+    return -mus_f
 

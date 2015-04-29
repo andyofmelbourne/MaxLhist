@@ -156,14 +156,10 @@ d = jacobian_mus_calc(f, muhat_0, hists, prob_tol = 1.0e-10)
 d = d / np.sqrt(np.sum(np.abs(d)**2))
 
 # evaluate the directional derivative
-def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
-    jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
-    return (jacobian * np.conj(d)).real
-
 
 d = np.array([1.0], dtype=np.complex128)
 
-eprime_alpha = lambda alpha : mu_directional_derivative(d, f, muhat_0 + d * alpha, hists, prob_tol = 1.0e-10)
+eprime_alpha = lambda alpha : ut.mu_directional_derivative(d, f, muhat_0 + d * alpha, hists, prob_tol = 1.0e-10)
 
 alphas = np.arange(-200.0, 100.0, 1.0)
 eprime_alphas = []

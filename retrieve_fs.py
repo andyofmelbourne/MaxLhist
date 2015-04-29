@@ -9,7 +9,7 @@ import forward_model as fm
 import utils as ut
 
 # update
-def update_mus(f, mus0, hists, grad_calc, iters = 1):
+def update_fs(f, mus0, hists, grad_calc, iters = 1):
     """
     Follow the line of steepest descent.
         mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
@@ -44,20 +44,17 @@ if __name__ == '__main__':
 
     # inital guess
     #-------------
-    f      = F.pmf(np.arange(I))
+    f_god  = F.pmf(np.arange(I))
+    f      = hists[0]
+    f0     = f.copy()
 
-    mus0   = np.zeros_like(mus_god) 
-    # uncomment for a better starting guess
-    #for m in range(hists.shape[0]):
-    #    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
+    mus = mus_god
 
     # update the guess
     #-------------
-    mus = update_mus(f, mus0, hists, ut.jacobian_mus_calc, iters=5)
-    #mus = update_mus(f, mus0, hists, lambda x,y,z: jacobian_mus_manual_calc(x,y,z,ut.log_likelihood_calc), iters=100)
-    #mus = mus0
+    f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=5)
 
-    hists0 = fm.forward_hists(f, mus0, np.sum(hists[0]))
+    hists0 = fm.forward_hists(f0, mus, np.sum(hists[0]))
     hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
 
     # display
