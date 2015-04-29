@@ -196,3 +196,56 @@ def mu_transform(h):
     g[0 : -1] = np.fft.fft(h)[1 : M/2] * 2. / float(M)
     g[-1]     = np.sum(h * (-1)**np.arange(h.shape[0]) ) / float(M)
     return g
+
+def mu_to_muextended(mu):
+    """
+    Converts the real vector mu into the real independent Fourier
+    space variables, when the normalisation of mu is fixed and 
+    mu.shape[0] is even. The first half + 1 are the real positive 
+    Fourier components of mu while the second half - 1 are the
+    imaginary positive Fourier components of mu.
+
+    mu_extended = np.array([np.fft.rfft(mu).real[ 1 : ],  \
+                            np.fft.rfft(mu).imag[ 1 : -1])
+
+    Parameters
+    ----------
+    mu : 1D float array
+        Values of mu of length N.
+            
+    Returns
+    -------
+    mu_extended : 1D float array
+        Values of the "independent" Fourier components of mu when the 
+        normalisation of mu is fixed. Of length N - 1.
+    """
+    muhat       = np.fft.rfft(mu)
+    mu_extended = np.concatenate((muhat.real[1 :], muhat.imag[1 : -1]))
+    return mu_extended
+
+def muextended_to_mu(mu_extended, norm = 0.0):
+    """
+    Inverse of mu_to_muextended
+
+    Parameters
+    ----------
+    mu_extended : 1D float array
+        Values of the "independent" Fourier components of mu when the 
+        normalisation of mu is fixed. Of length N - 1.
+
+    norm : float
+        The normalisation of mu = np.sum(mu).
+            
+    Returns
+    -------
+    mu: 1D float array
+        Values of mu of length N.
+    """
+    N                 = mu_extended.shape[0] + 1
+    muhat             = np.empty( (N / 2 + 1,) , dtype=np.complex128)
+    muhat[0]          = norm
+    muhat[1 :]        = mu_extended[: N / 2]
+    muhat[1 : -1].imag= mu_extended[N/2 : ]
+    mu                = np.fft.irfft(muhat)
+    return mu
+

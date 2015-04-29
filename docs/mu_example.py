@@ -1,15 +1,17 @@
 import sys
 sys.path.insert(0, '../../')
+sys.path.insert(0, '../')
 
 from MaxLhist import utils as ut
 from MaxLhist import forward_model as fm
 from MaxLhist.retrieve_mus import jacobian_mus_manual_calc
 
-from cgls.cgls import line_search_secant
+#from cgls.cgls.line_search import line_search_secant
 
 import matplotlib.pyplot as plt
 import scipy
 import numpy as np
+
 
 def test_jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
     mus = ut.make_f_real(mushat)
@@ -144,9 +146,78 @@ if False :
     ax.legend()
     plt.show()
 
-# perform a secant line search
-x = np.array([0.])
-d = de_dmu
-fd = lambda fprime, d : 
-x, t = line_search_secant([0.], d, fd, iters = 1, sigma = 1.0e-3, tol=1.0e-10):
+
+mu_0    = np.array([0.0, 0.0], dtype=np.float64)
+muhat_0 = np.fft.rfft(mu_0)[1 :]
+mue_0   = ut.mu_to_muextended(mu_0)
+
+# find the descent direction
+d = jacobian_mus_calc(f, muhat_0, hists, prob_tol = 1.0e-10)
+d = d / np.sqrt(np.sum(np.abs(d)**2))
+
+# evaluate the directional derivative
+def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
+    jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
+    return (jacobian * np.conj(d)).real
+
+
+d = np.array([1.0], dtype=np.complex128)
+
+eprime_alpha = lambda alpha : mu_directional_derivative(d, f, muhat_0 + d * alpha, hists, prob_tol = 1.0e-10)
+
+alphas = np.arange(-200.0, 100.0, 1.0)
+eprime_alphas = []
+
+for a in alphas :
+    eprime_alphas.append(eprime_alpha(a))
+eprime_alphas = np.array(eprime_alphas)
+
+# bisection
+def mu_bisection(f_alpha, min_step = 1.):
+    # find a and b
+    a = 0.0
+    b = min_step
+    fa = f_alpha(a)
+    while fa * f_alpha(b) > 0 :
+        b = 2 * b
+        print b
+    x0, r = scipy.optimize.bisect(f_alpha, a, b, xtol=1e-2, rtol=4.4408920985006262e-16, maxiter=100, full_output=True, disp=True)
+    return x0
+
+# run the bisection line minimisation algorithm
+mu_0    = np.array([-50.0, 50.0], dtype=np.float64)
+muhat_0 = np.fft.rfft(mu_0)[1 :]
+mue_0   = ut.mu_to_muextended(mu_0)
+
+# find the descent direction
+d = -jacobian_mus_calc(f, muhat_0, hists, prob_tol = 1.0e-10)
+d = d / np.sqrt(np.sum(np.abs(d)**2))
+
+eprime_alpha = lambda alpha : mu_directional_derivative(d, f, muhat_0 + d * alpha, hists, prob_tol = 1.0e-10)
+
+alpha0 = mu_bisection(eprime_alpha)
+muhat_1 = muhat_0 + d * alpha0
+mu_1    = ut.make_f_real(muhat_1)
+print alpha0, muhat_0 + d * alpha0
+
+# plot the line and the error
+if True :
+    ax = plt.subplot(211)
+    ax.plot(mhs, errors, alpha = 0.8, color='k')
+    ax.set_xlim([mhs.min(), mhs.max()])
+    ax.set_xlabel('mhat')
+    ax.set_ylabel('log likelihood error')
+
+    ax.scatter(mue_0, ut.log_likelihood_calc(f, mu_0, hists, prob_tol = 1.0e-10))
+    ax.scatter(muhat_1[0].real, ut.log_likelihood_calc(f, mu_1, hists, prob_tol = 1.0e-10))
+    
+    ax = plt.subplot(212)
+    ax.plot(alphas + 100, eprime_alphas, alpha = 0.8, color='b')
+    ax.set_xlim([(alphas+100).min(), (alphas+100).max()])
+    ax.set_xlabel('alpha')
+    ax.set_ylabel('directional derivative')
+
+    ax.scatter(mue_0 + 100, eprime_alpha(0.0))
+    ax.scatter(muhat_1[0].real + 100, eprime_alpha(alpha0))
+    plt.show()
 

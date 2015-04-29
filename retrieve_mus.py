@@ -87,6 +87,7 @@ if __name__ == '__main__':
     f      = F.pmf(np.arange(I))
 
     mus0   = np.zeros_like(mus_god) 
+    # uncomment for a better starting guess
     #for m in range(hists.shape[0]):
     #    mus0[m]   = np.argmax(hists[m]) - np.argmax(f)
 
