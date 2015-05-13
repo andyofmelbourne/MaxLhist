@@ -264,6 +264,10 @@ def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
     jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
     return np.sum((jacobian * np.conj(d)).real)
 
+def f_directional_derivative(d, fhat, mus, hists, prob_tol = 1.0e-10):
+    jacobian = jacobian_fs_calc(fhat, mus, hists, prob_tol = 1.0e-10)
+    return np.sum((jacobian * np.conj(d)).real)
+
 def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
     mus = make_f_real(mushat)
     # this could be more efficient
@@ -276,3 +280,14 @@ def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
     mus_f = mu_transform(temp)
     return -mus_f
 
+def jacobian_fs_calc(fhat, mus, hists, prob_tol = 1.0e-10):
+    f = make_f_real(fhat, f_norm=1.0)
+    # this could be more efficient
+    r = 2.0J * np.pi * np.arange(float(fhat.shape[0])) / float(f.shape[0])
+    temp1 = np.zeros_like(fhat)
+    for m in range(len(mus)) :
+        temp0 = hists[m] / (prob_tol + roll_real(f, mus[m]))
+        ramp  = np.exp( r * mus[m] ) 
+        temp1 += mu_transform(temp0) * ramp
+    
+    return -temp1

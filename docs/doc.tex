@@ -174,7 +174,7 @@ Now we know have to define the independent variables for the probability (or adu
 
 If we want to refine the set of $\mu$ values using a gradient based method then we must calculate the gradients. We need to find the vector gradient of the log likelihood error with respect to the independent $\mu$-variables. 
 
-This is going to get messy... Let us try to evaluate the derivative with respect to the real part of the positive Fourier components of $\mu$ ($\hat{\mu}^r$). First we go down the derivative rabbit hole, then we clime our way back up: 
+This is going to get messy... Let us try to evaluate the derivative with respect to the real part of the positive Fourier components of $\mu$ ($\hat{\mu}^r$). First we go down the derivative rabbit hole, then we climb our way back up: 
 
 \begin{align}
    \frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n}\left[-\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))\right] \\
@@ -183,7 +183,7 @@ This is going to get messy... Let us try to evaluate the derivative with respect
 \end{align}
 
 
-Fine, now need to evaluate the final term:
+Fine, now we need to evaluate the final term:
 \begin{align}
    \frac{\partial f(i - \mu_m)}{\partial \hat{\mu}^r_n} &= \frac{\partial}{\partial \hat{\mu}^r_n} \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \\
    &= \frac{1}{I} \sum_{j=0}^{I-1} (\hat{f}_j e^{-2\pi i \mu_m w_j}) e^{2\pi i i w_j} \left[-2\pi i w_j \frac{\partial \mu_m}{\partial \hat{\mu}^r_n} \right]
@@ -368,16 +368,173 @@ Now we do an experiment for (say) 1000 shots, our data looks like:
 \caption{log likelyhood error with a tolerance of $10^{-10}$.}
 \label{error}
 \end{figure}
-Now let's look at the error as a function of $\hat{\mu}_1^r$ in Fig. \ref{error}. The good thing is that the error seems nice and quadratic near the correct value of $\hat{\mu}_1^r$ (-40) however we can also see that the error levels out at larger or lower values. This is due to rounding errors in the natural logarithm, when evaluating the error metric. Basically, if our initial guess for the $\mu$ values is inside the flat region then we are screwed.
+Now let's look at the error as a function of $\hat{\mu}_1^r$ in Fig. \ref{error}. The good thing is that the error seems nice and quadratic near the correct value of $\hat{\mu}_1^r$ (-40) however we can also see that the error flattens out at larger or lower values. This is due to rounding errors in the natural logarithm, when evaluating the error metric. Basically, if our initial guess for the $\mu$ values is inside the flat region then we are screwed.
 
 Also shown are the tangent lines for $\hat{\mu}^r_1 = 0$ and $-40$, calculated using Eq. (\ref{mu_grad}) which look resonable. Note that we do not expect the gradient at the correct solution (-40) to be zero, this is because we do not have perfect statistics of the function $f$ in the histograms.
 
+So, starting at some value for $\hat{\mu}^0$, we would then like to find the local minimum (-40) of the log likelihood error. We will start with the simplest approach, and completely disregard computational efficiency for now. Starting at $\hat{\mu}^0$ we can compute the steepest descent direction $-\frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}_n}|_{\hat{\mu}^0}$ then step along this line until we are close enough to the local minimum of the error to look for the next search direction. 
+
+We have many options for the line search but let's start with something very simple (and very slow); the bisection method [google it]. 
+
+\iffalse
+But before we dive into this our lives will be much easier if we have a real set of variables and gradients. In the code below $\mu$, $\hat{\mu}$ and $\hat{\mu}_\text{extended}$ are all interchangable:
+
+\begin{verbatim}
+
+def mu_to_muextended(mu):
+    """
+    Converts the real vector mu into the real independent Fourier
+    space variables, when the normalisation of mu is fixed and 
+    mu.shape[0] is even. The first half + 1 are the real positive 
+    Fourier components of mu while the second half - 1 are the
+    imaginary positive Fourier components of mu.
+
+    mu_extended = np.array([np.fft.rfft(mu).real[ 1 : ], \
+                            np.fft.rfft(mu).imag[ 1 : -1])
+
+    Parameters
+    ----------
+    mu : 1D float array
+        Values of mu of length N.
+            
+    Returns
+    -------
+    mu_extended : 1D float array
+        Values of the "independent" Fourier components of mu when the 
+        normalisation of mu is fixed. Of length N - 1.
+    """
+    muhat       = np.fft.rfft(mu)
+    mu_extended = np.concatenate((muhat.real[1 :], muhat.imag[1 : -1]))
+    return mu_extended
+
+def muextended_to_mu(mu_extended, norm = 0.0):
+    """
+    Inverse of mu_to_muextended
+
+    Parameters
+    ----------
+    mu_extended : 1D float array
+        Values of the "independent" Fourier components of mu when the 
+        normalisation of mu is fixed. Of length N - 1.
+
+    norm : float
+        The normalisation of mu = np.sum(mu).
+            
+    Returns
+    -------
+    mu: 1D float array
+        Values of mu of length N.
+    """
+    N                 = mu_extended.shape[0] + 1
+    muhat             = np.empty( (N / 2 + 1,) , dtype=np.complex128)
+    muhat[0]          = norm
+    muhat[1 :]        = mu_extended[: N / 2]
+    muhat[1 : -1].imag= mu_extended[N/2 : ]
+    mu                = np.fft.irfft(muhat)
+    return mu
+
+\end{verbatim}
+\fi
+
+As we step along the steepest descent direction $d$, from the point $\hat{\mu}^0$ the gradient along this line is given by:
+\begin{align}
+   \varepsilon'(\alpha) &= \Re\left\{\sum_n \hat{d}^*_n \frac{\partial \varepsilon(\mu, f)}{\partial \hat{\mu}_n}|_{\hat{\mu}^0 + \alpha \hat{d}} \right\}
+   \label{directional_derivative}
+\end{align}
+To find the minimum of $\varepsilon(\alpha) = \varepsilon(\mu^0 + \alpha d, f)$ we can then find the root of the Eq. \ref{directional_derivative}. 
+
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.50]{figure_4.png}
+\caption{log likelyhood error with a tolerance of $10^{-10}$ (top) showing the starting guess (-100) and the end position after the bisection minimisation (-40.21). The directional derivative, where $\hat{d}$ has been normalised.}
+\label{bisection}
+\end{figure}
+
+The result of the bisection line search is shown in Fig. \ref{bisection}. 
+
+\begin{verbatim}
+def mu_bisection(f_alpha, min_step = 1.):
+    # find a and b
+    a = 0.0
+    b = min_step
+    fa = f_alpha(a)
+    while fa * f_alpha(b) > 0 :
+        b = 2 * b
+    x0, r = scipy.optimize.bisect(f_alpha, a, b, xtol=1e-2, \
+    rtol=4.4408920985006262e-16, maxiter=100, full_output=True, disp=True)
+    return x0
+
+def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
+    jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
+    return np.sum((jacobian * np.conj(d)).real)
+
+def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
+    mus = make_f_real(mushat)
+    # this could be more efficient
+    f_prime_shift = np.zeros_like(hists, dtype=np.float64)
+    for m in range(len(mus)) :
+        f_prime_shift[m] = grad_shift_f_real(f, mus[m]) \
+        / (prob_tol + roll_real(f, mus[m]))
+    
+    temp  = hists * f_prime_shift 
+    temp  = np.sum(temp, axis=1)
+    mus_f = mu_transform(temp)
+    return -mus_f
+
+\end{verbatim}
+
+And finally we use the same code to solve for a list of 10 $\mu$ values from 10 histograms, each with 50 counts. The results are shown in Fig. \ref{more_mus}.
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.50]{figure_5.png}
+\caption{Result of refining the initial estimate for the set of shift coordinates. The initial estimates are all zero (red lines) and the refined values are shown in green. The filled white plots are the histogram data. }
+\label{more_mus}
+\end{figure}
 
 
 
+\subsection{$f$ The probability (or adu) distribution}
+Hopefully most of the infrastructure is already in place now to refine the values of $f$ given a set of $\mu$ values without too much pain.  
+
+Following the in same lines:
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{f}^r_j} &= \frac{\partial}{\partial \hat{f}^r_j}\left[-\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))\right] \\
+   &=  -\sum_m^M \sum_i^I h^m_i \frac{\partial}{\partial \hat{f}^r_j} \ln(f(i - \mu_m)) \\
+   &=  -\sum_m^M \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} 
+\end{align}
+
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} &= \frac{\partial}{\partial \hat{f}^r_j} \frac{1}{I} \sum_{k=0}^{I-1} (\hat{f}_k e^{-2\pi i \mu_m w_k}) e^{2\pi i i w_k} \\
+   &= \frac{1}{I} \sum_{k=0}^{I-1} e^{-2\pi i \mu_m w_k} e^{2\pi i i w_k} \frac{\partial \hat{f}_k }{\partial \hat{f}^r_j}
+\end{align}
+
+Once again we must remember that the $\hat{f}_k$s are not linearly independent:
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} &= \frac{1}{I} \sum_{f_k=-I/2 + 1}^{-1} \delta_{f_k + f_j} e^{-2\pi i (\mu_m - i)w_k} + \frac{1}{I} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} e^{-2\pi i (\mu_m - i)w_k} \\
+   &+ \frac{1}{I} \delta_{f_j - 0} + \frac{1}{I} \delta_{f_j - I/2} e^{\pi i (\mu_m - i)} \\
+   &= \frac{1}{I} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} \left[e^{2\pi i (\mu_m - i)w_j} + e^{-2\pi i (\mu_m - i)w_j} \right] \\
+   &+ \frac{1}{I} \delta_{f_j - 0} + \frac{1}{I} \delta_{f_j - I/2} e^{-\pi i (\mu_m - i)} \\
+   &= \frac{2}{I} \cos(2\pi (\mu_m - i)w_j) \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \frac{1}{I}\left(\delta_{f_j} +  e^{-\pi i (\mu_m - i)} \delta_{f_j - I/2} \right)
+\end{align}
+
+Which is exacly the same as before except that we also have the shift terms in there. We can bring the real and imaginary (skipped here) parts together:
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{f}_j} &\equiv \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} + i \frac{\partial f(i - \mu_m)}{\partial \hat{f}^i_j} \\
+   &= \frac{2}{I} e^{-2\pi i (i - \mu_m) w_j} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \frac{1}{I}\left(\delta_{f_j} + e^{-\pi i (\mu_m - i)} \delta_{f_j - I/2} \right)
+\end{align}
+
+Actually this expression is separable:
+\begin{align}
+   \frac{\partial f(i - \mu_m)}{\partial \hat{f}_j} &= e^{2\pi i \mu_m w_j} \frac{1}{I} \left[2 e^{-2\pi i i w_j} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \delta_{f_j} + (-1)^{i} \delta_{f_j - I/2} \right] \\
+   &= e^{2\pi i \mu_m w_j} \frac{\partial f_i}{\partial \hat{f}_j}
+\end{align}
 
 
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{f}_j} &= -\sum_m^M e^{2\pi i \mu_m w_j} \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial f_i}{\partial \hat{f}_j} 
+\end{align}
 
 
 \end{document}
+
 

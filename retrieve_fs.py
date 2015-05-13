@@ -9,33 +9,35 @@ import forward_model as fm
 import utils as ut
 
 # update
-def update_fs(f, mus0, hists, grad_calc, iters = 1):
+def update_fs(f0, mus, hists, grad_calc, iters = 1):
     """
     Follow the line of steepest descent.
         mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
     """
-    mus = mus0.copy()
+    f = f0.copy()
     
     # go to Fourier space
-    muhat = np.fft.rfft(mus)[1 :]
+    fhat = np.fft.rfft(f)[1 :]
     
     for i in range(iters):
         # print the error
-        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists), np.array(mus, dtype=np.int)
+        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists)
 
         # calculate the descent direction
-        grad = -grad_calc(f, muhat, hists)
+        grad = -grad_calc(fhat, mus, hists)
         grad = grad / np.sqrt( np.sum( np.abs(grad)**2 ) ) 
-        
+
         # perform the line minimisation in this direction
-        eprime_alpha = lambda alpha : ut.mu_directional_derivative(grad, f, muhat + grad * alpha, hists, prob_tol = 1.0e-10)
+        eprime_alpha = lambda alpha : ut.f_directional_derivative(grad, fhat + grad * alpha, mus, hists, prob_tol = 1.0e-10)
         alpha        = ut.mu_bisection(eprime_alpha)
 
-        muhat = muhat + grad * alpha
-        mus   = ut.make_f_real(muhat)
+        print alpha, grad
+        
+        fhat  = fhat + grad * alpha
+        f     = ut.make_f_real(fhat, f_norm=1.0)
 
     print i+1, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists), np.array(mus, dtype=np.int)
-    return mus
+    return f
 
 if __name__ == '__main__':
     # forward model 
@@ -45,14 +47,15 @@ if __name__ == '__main__':
     # inital guess
     #-------------
     f_god  = F.pmf(np.arange(I))
-    f      = hists[0]
+    f      = np.sum(hists.astype(np.float64), axis=0) 
+    f      = f / np.sum(f)
     f0     = f.copy()
 
     mus = mus_god
 
     # update the guess
     #-------------
-    f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=5)
+    f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=1)
 
     hists0 = fm.forward_hists(f0, mus, np.sum(hists[0]))
     hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
@@ -69,11 +72,11 @@ if __name__ == '__main__':
         pg.setConfigOptions(antialias=True)
         
         # show f and the mu values
-        p1 = win.addPlot(title="probablity function", x = np.arange(I), y = F.pmf(np.arange(I)), name = 'f')
+        p1 = win.addPlot(title="probablity function", x = np.arange(I), y = f_god, name = 'f_god')
+        p1.plot(x = np.arange(I), y = f0, pen=(255, 0, 0), name = 'f0')
+        p1.plot(x = np.arange(I), y = f, pen=(0, 255, 0), name = 'f')
         
         p2 = win.addPlot(title="shifts", y = mus_god, name = 'shifts')
-        p2.plot(mus0, pen=(255, 0, 0), name = 'mus0')
-        p2.plot(mus, pen=(0, 255, 0), name = 'mus')
         
         win.nextRow()
         
