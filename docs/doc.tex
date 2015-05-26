@@ -15,7 +15,7 @@ Thought experiment:
 \begin{itemize}
 
   \item We have a single discrete random variable x with a probability distribution $f(x)$, where each value of $x$ is independent from the last. 
-  \item $x$ is measured $N$ times.
+  \item $x$ is measured $N$ times. In the interval from $0$ to $I-1$.
   \item This is repeated $M$ times. Yielding the set of values $x^m_n$.
 
 \end{itemize}
@@ -46,7 +46,10 @@ In principle we should not care about the ordering of $x$ samples between pixels
 
 The log likelihood is then:
 \begin{align}
-   \varepsilon(f) = -ln(Pr(x^m_n; f)) = \prod_{m=0}^{M-1}\frac{N!}{h^m_0! h^m_1! \cdots h^m_{I-1}!} \prod_{x=0}^{I-1} f(x)^{h^m_{x}}
+   \varepsilon(f) &= -\ln(Pr(x^m_n; f)) = -\ln\left(\prod_{m=0}^{M-1}\frac{N!}{h^m_0! h^m_1! \cdots h^m_{I-1}!} \prod_{x=0}^{I-1} f(x)^{h^m_{x}}\right) \\
+   &= -\sum_{m=0}^{M-1}\ln\left(\frac{N!}{h^m_0! h^m_1! \cdots h^m_{I-1}!} \prod_{x=0}^{I-1} f(x)^{h^m_{x}}\right) \\
+   &= -\sum_{m=0}^{M-1}\left[\ln\left(\frac{N!}{h^m_0! h^m_1! \cdots h^m_{I-1}!}\right) +\ln\left(\prod_{x=0}^{I-1} f(x)^{h^m_{x}}\right) \right]\\
+   &= -\sum_{m=0}^{M-1}\left[\ln\left(\frac{N!}{h^m_0! h^m_1! \cdots h^m_{I-1}!}\right) +\sum_{x=0}^{I-1} h^m_x \ln\left(f(x)\right) \right]\\
 \end{align}
 
 
