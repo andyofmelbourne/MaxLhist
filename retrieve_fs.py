@@ -44,9 +44,19 @@ if __name__ == '__main__':
     #--------------
     hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.)
 
+    # truncate to non-zero measurements
+    #----------------------------------
+    f       = np.sum(hists, axis=0) 
+    i_range = np.where(f > 0)[0] 
+    i_min   = i_range[0] 
+    i_max   = i_range[-1] 
+    i_range = np.arange(i_min, i_max+1)
+    
+    hists = hists[:, i_min : i_max+1]
+
     # inital guess
     #-------------
-    f_god  = F.pmf(np.arange(I))
+    f_god  = F.pmf(i_range)
     f      = np.sum(hists.astype(np.float64), axis=0) 
     f      = f / np.sum(f)
     f0     = f.copy()
@@ -72,9 +82,9 @@ if __name__ == '__main__':
         pg.setConfigOptions(antialias=True)
         
         # show f and the mu values
-        p1 = win.addPlot(title="probablity function", x = np.arange(I), y = f_god, name = 'f_god')
-        p1.plot(x = np.arange(I), y = f0, pen=(255, 0, 0), name = 'f0')
-        p1.plot(x = np.arange(I), y = f, pen=(0, 255, 0), name = 'f')
+        p1 = win.addPlot(title="probablity function", x = i_range, y = f_god, name = 'f_god')
+        p1.plot(x = i_range, y = f0, pen=(255, 0, 0), name = 'f0')
+        p1.plot(x = i_range, y = f, pen=(0, 255, 0), name = 'f')
         
         p2 = win.addPlot(title="shifts", y = mus_god, name = 'shifts')
         
