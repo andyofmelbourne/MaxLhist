@@ -161,6 +161,7 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
         
         # evaluate the shifted probability function
         fs = roll_real(f, mus[m])[Is] 
+        fs[np.where(fs < 0)] = 0.0
 
         # sum the log liklihood errors for this pixel
         e  = hists[m, Is] * np.log(prob_tol + fs)

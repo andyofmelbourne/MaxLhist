@@ -9,39 +9,24 @@ import forward_model as fm
 import utils as ut
 
 # update
-def update_fs(f0, mus, hists, grad_calc, iters = 1):
+def update_fs(f0, mus, hists):
     """
     Follow the line of steepest descent.
         mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
     """
     f = f0.copy()
 
+    print 0, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-5)
+    
     h = np.zeros( f.shape, dtype=f.dtype)
     for m in range(len(mus)) :
         h += ut.roll_real(hists[m].astype(np.float64), - mus[m])
     # generate a mask for the gradient vector
     mask = (h >= 1.0)
-    f = mask * f
+    f = mask * h
     f = f / np.sum(f)
-    
-    for i in range(iters):
-        # print the error
-        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists)
 
-        # calculate the descent direction
-        grad = -grad_calc(f, mus, hists)
-        
-        # make into a unit vector
-        grad = grad / np.sqrt( np.sum( np.abs(grad)**2 ) ) 
-
-        # perform the line minimisation in this direction
-        eprime_alpha = lambda alpha : ut.f_directional_derivative(grad, f + grad * alpha, mus, hists, prob_tol = 1.0e-10)
-        alpha        = ut.mu_bisection(eprime_alpha)
-
-        f = f + grad * alpha
-        print f, '\n\n\n'
-
-    print i+1, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists), np.array(mus, dtype=np.int)
+    print 1, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-5)
     return f
 
 if __name__ == '__main__':
@@ -64,14 +49,7 @@ if __name__ == '__main__':
 
     # update the guess
     #-------------
-    #f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=5)
-    h = np.zeros( f.shape, dtype=f.dtype)
-    for m in range(len(mus)) :
-        h += ut.roll_real(hists[m].astype(np.float64), - mus[m])
-    # generate a mask for the gradient vector
-    mask = (h >= 1.0)
-    f = mask * h
-    f = f / np.sum(f)
+    f = update_fs(f, mus, hists)
 
     hists0 = fm.forward_hists(f0, mus, np.sum(hists[0]))
     hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
