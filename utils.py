@@ -264,8 +264,8 @@ def mu_directional_derivative(d, f, muhat, hists, prob_tol = 1.0e-10):
     jacobian = jacobian_mus_calc(f, muhat, hists, prob_tol = 1.0e-10)
     return np.sum((jacobian * np.conj(d)).real)
 
-def f_directional_derivative(d, fhat, mus, hists, prob_tol = 1.0e-10):
-    jacobian = jacobian_fs_calc(fhat, mus, hists, prob_tol = 1.0e-10)
+def f_directional_derivative(d, f, mus, hists, prob_tol = 1.0e-10):
+    jacobian = jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10)
     return np.sum((jacobian * np.conj(d)).real)
 
 def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
@@ -280,14 +280,29 @@ def jacobian_mus_calc(f, mushat, hists, prob_tol = 1.0e-10):
     mus_f = mu_transform(temp)
     return -mus_f
 
-def jacobian_fs_calc(fhat, mus, hists, prob_tol = 1.0e-10):
-    f = make_f_real(fhat, f_norm=1.0)
-    # this could be more efficient
-    r = 2.0J * np.pi * np.arange(float(fhat.shape[0])) / float(f.shape[0])
-    temp1 = np.zeros_like(fhat)
+def jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10):
+    h = np.zeros( f.shape, dtype=f.dtype)
     for m in range(len(mus)) :
-        temp0 = hists[m] / (prob_tol + roll_real(f, mus[m]))
-        ramp  = np.exp( r * mus[m] ) 
-        temp1 += mu_transform(temp0) * ramp
+        h += roll_real(hists[m].astype(np.float64), - mus[m])
     
-    return -temp1
+    # generate a mask for the gradient vector
+    mask = (h >= 1.0)
+    
+    # calculate the intial gradient (regardless of normalisation / zeros)
+    grad = - h / (prob_tol + f)
+    
+    #print '\n\n\n grad:'
+    #print grad * mask
+
+    grad = - grad * mask
+    """
+    # normalise
+    grad = mask * (grad - np.sum(mask * grad) / float(np.sum(mask)))
+    #print 'gradient sum', np.sum(grad)
+    print '\n\n\n grad:'
+    print grad * mask
+    
+    import sys
+    sys.exit()
+    """
+    return grad

@@ -491,48 +491,36 @@ And finally we use the same code to solve for a list of 10 $\mu$ values from 10 
 \label{more_mus}
 \end{figure}
 
+\subsection{Project a vector onto the set of vectors with sum = 0 and some elements = 0}
+If we have a mask $M$ and (general) vector $v$ then the projection of $v$ onto the set of vectors for which $\sum v = 0$ and $M \cdot v = v$ is given by:
+\begin{align}
+   v'_n = P \cdot v = M_n \left[ v_n - \frac{\sum_m v_m M_m}{\sum_m M_m} \right]
+\end{align}
+
+
 
 
 \subsection{$f$ The probability (or adu) distribution}
 Hopefully most of the infrastructure is already in place now to refine the values of $f$ given a set of $\mu$ values without too much pain.  
-
-Following the in same lines:
 \begin{align}
-   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{f}^r_j} &= \frac{\partial}{\partial \hat{f}^r_j}\left[-\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))\right] \\
-   &=  -\sum_m^M \sum_i^I h^m_i \frac{\partial}{\partial \hat{f}^r_j} \ln(f(i - \mu_m)) \\
-   &=  -\sum_m^M \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} 
+   \frac{\partial \varepsilon(\mu, f)}{\partial f_j} &= -\frac{\partial}{\partial f_j} \sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m)) \\
+   &= -\frac{\partial}{\partial f_j} \sum_m^M \sum_i^I h^m_{i+\mu_m} \ln(f_i) \\
+   &= -\sum_m^M \sum_i^I h^m_{i+\mu_m} \frac{\delta_{i-j}}{f_i} \\
+   &= -\frac{\sum_m^M h^m_{j+\mu_m}}{f_j}
 \end{align}
 
+In the present case this gradient vector will simply encourage ever increasing values of $f$. That is, we have to keep $f$ normalised. Now we could do this by representing $f$ in Fourier space and recalculating the gradient vector there (as we did for $\mu$). But then we also have the problem that values of $f$ for which $\sum_m^M h^m_{j+\mu_m}$ is zero have no effect on the error metric. Thus they are completely free to float in order to satisfy any normalisation constraint.
+
+What we can do instead is simply project the gradient vector onto the closest vector that has a normalisation of zero, and is zero when $M_j (= \sum_m^M h^m_{j+\mu_m} > 0)$ is zero:
 \begin{align}
-   \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} &= \frac{\partial}{\partial \hat{f}^r_j} \frac{1}{I} \sum_{k=0}^{I-1} (\hat{f}_k e^{-2\pi i \mu_m w_k}) e^{2\pi i i w_k} \\
-   &= \frac{1}{I} \sum_{k=0}^{I-1} e^{-2\pi i \mu_m w_k} e^{2\pi i i w_k} \frac{\partial \hat{f}_k }{\partial \hat{f}^r_j}
+   \nabla f_j &= P \cdot \frac{\partial \varepsilon(\mu, f)}{\partial f} \\
+   &= -M_j \left[\frac{\sum_m^M h^m_{j+\mu_m}}{f_j}  - \frac{\sum_i M_i (\sum_m^M h^m_{i+\mu_m})/f_i}{\sum_i M_i} \right]
 \end{align}
 
-Once again we must remember that the $\hat{f}_k$s are not linearly independent:
-\begin{align}
-   \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} &= \frac{1}{I} \sum_{f_k=-I/2 + 1}^{-1} \delta_{f_k + f_j} e^{-2\pi i (\mu_m - i)w_k} + \frac{1}{I} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} e^{-2\pi i (\mu_m - i)w_k} \\
-   &+ \frac{1}{I} \delta_{f_j - 0} + \frac{1}{I} \delta_{f_j - I/2} e^{\pi i (\mu_m - i)} \\
-   &= \frac{1}{I} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} \left[e^{2\pi i (\mu_m - i)w_j} + e^{-2\pi i (\mu_m - i)w_j} \right] \\
-   &+ \frac{1}{I} \delta_{f_j - 0} + \frac{1}{I} \delta_{f_j - I/2} e^{-\pi i (\mu_m - i)} \\
-   &= \frac{2}{I} \cos(2\pi (\mu_m - i)w_j) \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \frac{1}{I}\left(\delta_{f_j} +  e^{-\pi i (\mu_m - i)} \delta_{f_j - I/2} \right)
-\end{align}
-
-Which is exacly the same as before except that we also have the shift terms in there. We can bring the real and imaginary (skipped here) parts together:
-\begin{align}
-   \frac{\partial f(i - \mu_m)}{\partial \hat{f}_j} &\equiv \frac{\partial f(i - \mu_m)}{\partial \hat{f}^r_j} + i \frac{\partial f(i - \mu_m)}{\partial \hat{f}^i_j} \\
-   &= \frac{2}{I} e^{-2\pi i (i - \mu_m) w_j} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \frac{1}{I}\left(\delta_{f_j} + e^{-\pi i (\mu_m - i)} \delta_{f_j - I/2} \right)
-\end{align}
-
-Actually this expression is separable:
-\begin{align}
-   \frac{\partial f(i - \mu_m)}{\partial \hat{f}_j} &= e^{2\pi i \mu_m w_j} \frac{1}{I} \left[2 e^{-2\pi i i w_j} \sum_{f_k=1}^{I/2-1} \delta_{f_k - f_j} + \delta_{f_j} + (-1)^{i} \delta_{f_j - I/2} \right] \\
-   &= e^{2\pi i \mu_m w_j} \frac{\partial f_i}{\partial \hat{f}_j}
-\end{align}
-
-
-\begin{align}
-   \frac{\partial \varepsilon(\mu, f)}{\partial \hat{f}_j} &= -\sum_m^M e^{2\pi i \mu_m w_j} \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \frac{\partial f_i}{\partial \hat{f}_j} 
-\end{align}
+%\begin{align}
+%   \nabla f_j &= P \cdot \frac{\partial \varepsilon(\mu, f)}{\partial f} \\
+%   &= -\left[\frac{\sum_m^M h^m_{j+\mu_m}}{f_j}  - \frac{1}{I} \sum_i \frac{\sum_m^M h^m_{i+\mu_m}}{f_i} \right]
+%\end{align}
 
 
 \end{document}
