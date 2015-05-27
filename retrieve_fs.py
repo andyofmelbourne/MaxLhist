@@ -15,9 +15,13 @@ def update_fs(f0, mus, hists, grad_calc, iters = 1):
         mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
     """
     f = f0.copy()
+    print 0
+    print f, '\n\n\n'
     
     # go to Fourier space
     fhat = np.fft.rfft(f)[1 :]
+
+    hist_zeros = np.where(np.sum(hists, axis=0) <= 0)
     
     for i in range(iters):
         # print the error
@@ -25,16 +29,27 @@ def update_fs(f0, mus, hists, grad_calc, iters = 1):
 
         # calculate the descent direction
         grad = -grad_calc(fhat, mus, hists)
+        print i, 'grad'
+        print grad, '\n\n\n'
+        
+        # enforce positivity and real-space zeros
+        f     = ut.make_f_real(grad, f_norm=0.0)
+        #f[np.where(f < 0)] = 0.0
+        f[hist_zeros]      = 0.0
+        grad  = np.fft.rfft(f)[1 :]
+
+        # make into a unit vector
         grad = grad / np.sqrt( np.sum( np.abs(grad)**2 ) ) 
 
         # perform the line minimisation in this direction
         eprime_alpha = lambda alpha : ut.f_directional_derivative(grad, fhat + grad * alpha, mus, hists, prob_tol = 1.0e-10)
         alpha        = ut.mu_bisection(eprime_alpha)
 
-        print alpha, grad
+        print alpha
         
         fhat  = fhat + grad * alpha
         f     = ut.make_f_real(fhat, f_norm=1.0)
+        print f, '\n\n\n'
 
     print i+1, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists), np.array(mus, dtype=np.int)
     return f
@@ -46,14 +61,15 @@ if __name__ == '__main__':
 
     # truncate to non-zero measurements
     #----------------------------------
+    """
     f       = np.sum(hists, axis=0) 
     i_range = np.where(f > 0)[0] 
     i_min   = i_range[0] 
     i_max   = i_range[-1] 
     i_range = np.arange(i_min, i_max+1)
+    """
+    i_range = np.arange(I)
     
-    hists = hists[:, i_min : i_max+1]
-
     # inital guess
     #-------------
     f_god  = F.pmf(i_range)
@@ -65,13 +81,13 @@ if __name__ == '__main__':
 
     # update the guess
     #-------------
-    f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=1)
+    f = update_fs(f, mus, hists, ut.jacobian_fs_calc, iters=5)
 
     hists0 = fm.forward_hists(f0, mus, np.sum(hists[0]))
     hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
 
     # display
-    if True :
+    if False :
         import pyqtgraph as pg
         import PyQt4.QtGui
         import PyQt4.QtCore
