@@ -48,7 +48,11 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20., size = 50):
 def forward_hists(f, mus, N):
     hists = np.zeros(mus.shape + f.shape, dtype=f.dtype)
     for i in range(hists.shape[0]):
-        hists[i] = ut.roll_real(f, mus[i]) * N
+        hists[i] = ut.roll_real(f, mus[i]) 
+    if type(N) is int : 
+        hists = hists * N
+    else :
+        hists = (hists.T * N).T
     return hists
 
 if __name__ == '__main__':

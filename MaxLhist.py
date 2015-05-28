@@ -160,8 +160,9 @@ class Result():
                 mus0 = e['initial guess']
                 mus  = e['values']
 
-        hists0 = fm.forward_hists(f0, mus0, np.sum(hists[0]))
-        hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
+        N = np.sum(hists, axis=1)
+        hists0 = fm.forward_hists(f0, mus0, N)
+        hists1 = fm.forward_hists(f, mus, N)
         
         i_range = np.arange(hists.shape[1])
         
@@ -181,7 +182,7 @@ class Result():
         
         p2 = win.addPlot(title=mus_name)
         p2.plot(mus0, pen=(255, 0, 0), name = 'mus0')
-        p2.plot(mus, pen=(0, 255, 0), name = 'mus')
+        p2.plot(mus,  pen=(0, 255, 0), name = 'mus')
         
         win.nextRow()
         
@@ -202,3 +203,6 @@ class Result():
         p3.showGrid(x=True, y=True) 
         sys.exit(app.exec_())
             
+if __name__ == '__main__':
+    print 'executing :', sys.argv[1]
+    execfile(sys.argv[1])
