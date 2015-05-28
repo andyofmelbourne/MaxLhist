@@ -1,5 +1,6 @@
 \documentclass[11pt]{article}
 \usepackage{amsmath}
+\usepackage{amssymb}
 %Gummi|065|=)
 \title{\textbf{Finding adu distributions or finding photons}}
 \author{Andrew Morgan}
@@ -491,11 +492,6 @@ And finally we use the same code to solve for a list of 10 $\mu$ values from 10 
 \label{more_mus}
 \end{figure}
 
-\subsection{Project a vector onto the set of vectors with sum = 0 and some elements = 0}
-If we have a mask $M$ and (general) vector $v$ then the projection of $v$ onto the set of vectors for which $\sum v = 0$ and $M \cdot v = v$ is given by:
-\begin{align}
-   v'_n = P \cdot v = M_n \left[ v_n - \frac{\sum_m v_m M_m}{\sum_m M_m} \right]
-\end{align}
 
 
 
@@ -511,17 +507,41 @@ Hopefully most of the infrastructure is already in place now to refine the value
 
 In the present case this gradient vector will simply encourage ever increasing values of $f$. That is, we have to keep $f$ normalised. Now we could do this by representing $f$ in Fourier space and recalculating the gradient vector there (as we did for $\mu$). But then we also have the problem that values of $f$ for which $\sum_m^M h^m_{j+\mu_m}$ is zero have no effect on the error metric. Thus they are completely free to float in order to satisfy any normalisation constraint.
 
-What we can do instead is simply project the gradient vector onto the closest vector that has a normalisation of zero, and is zero when $M_j (= \sum_m^M h^m_{j+\mu_m} > 0)$ is zero:
+Let's choose one of the $f$ values to keep $f$ normalised:
 \begin{align}
-   \nabla f_j &= P \cdot \frac{\partial \varepsilon(\mu, f)}{\partial f} \\
-   &= -M_j \left[\frac{\sum_m^M h^m_{j+\mu_m}}{f_j}  - \frac{\sum_i M_i (\sum_m^M h^m_{i+\mu_m})/f_i}{\sum_i M_i} \right]
+   f_j = \delta_{j} (1 - \sum_{i=1}^I f_i) + \sum_{i=1}^I \delta_{i-j} f_i
 \end{align}
 
-%\begin{align}
-%   \nabla f_j &= P \cdot \frac{\partial \varepsilon(\mu, f)}{\partial f} \\
-%   &= -\left[\frac{\sum_m^M h^m_{j+\mu_m}}{f_j}  - \frac{1}{I} \sum_i \frac{\sum_m^M h^m_{i+\mu_m}}{f_i} \right]
-%\end{align}
+This means that not all of the $f$ are linearly independ, so we must recalculate the derivative term:
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial f_j} &= -\frac{\partial}{\partial f_j} \sum_m^M \sum_i^I h^m_{i+\mu_m} \ln(f_i) \\
+   &= - \sum_m^M \sum_i^I h^m_{i+\mu_m} \frac{1}{f_i} \frac{\partial f_i}{\partial f_j}
+\end{align}
 
+and
+\begin{align}
+   \frac{\partial f_i}{\partial f_j} &= \frac{\partial }{\partial f_j} \left[ \delta_{i} (1 - \sum_{k=1}^I f_k) + \sum_{k=1}^I \delta_{k-i} f_k \right] \quad \text{for } j > 0 \\
+   &= -\delta_{i} + \delta_{j-i}
+\end{align}
+
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial f_j} &=- \sum_m^M \sum_i^I h^m_{i+\mu_m} \frac{1}{f_i} (-\delta_{i} + \delta_{j-i}) \\
+   &= \frac{ \sum_m^M h^m_{0+\mu_m}}{f_0} - \frac{ \sum_m^M h^m_{j+\mu_m}}{f_j} \\
+   &= \frac{ h_{0}}{f_0} - \frac{ h_{j}}{f_j}
+\end{align}
+where I have defined $h_j \equiv \sum_m^M h^m_{j+\mu_m}$. Notice that at this point our choice of normalisation has biased the evaluation of the gradient vector. For example, what if $h_0$ where zero? Now let's see if we can demand that $\partial \varepsilon(\mu, f) / \partial f_j = 0$:
+\begin{align}
+   \frac{ h_{0}}{f_0} &= \frac{ h_{j}}{f_j} \\
+   \therefore f_j &= \frac{f_0}{h_0} h_j \\
+   \therefore f_0 &= 1 -  \frac{f_0}{h_0} \sum_{j=1} h_j \\
+   \therefore f_0 &= \frac{h_0}{h_0 + \sum_{j=1} h_j} = \frac{h_0}{\sum_{j=0} h_j} \\
+   \therefore f_j &= \frac{h_0}{\sum_{j=0} h_j} \frac{1}{h_0} h_j = \frac{h_j}{\sum_{j=0} h_j}
+\end{align}
+Magic! Now our choice of $f_0$ as the normalisation term has no effect on the $f$'s chosen to minimise the log likelihood error. So, for any given estimate of $\mu$'s we can immediately maximise the likelihood. 
+
+
+\subsection{$\mu$ The offset's or dark values (again)}
+This makes me wonder if we cannot do something similar with the $\mu$'s. 
 
 \end{document}
 

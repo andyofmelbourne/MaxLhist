@@ -122,7 +122,9 @@ def grad_shift_f_real(f, shift):
     fh      = np.fft.rfft(f)
     lramp   = -2.0J * np.pi * np.arange(float(fh.shape[0])) \
               / float(f.shape[0])
-    ramp    = lramp * np.exp(shift * lramp)
+    ramp    = lramp 
+    if shift != 0 :
+        ramp *= np.exp(shift * lramp)
     f_shift = np.fft.irfft(fh * ramp)
     return f_shift
 

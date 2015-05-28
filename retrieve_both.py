@@ -31,31 +31,33 @@ def update_fs(f0, mus, hists):
     print 1, 'log likelihood error', error
     return f, error
 
-def update_mus(f, mus0, hists, grad_calc, iters = 1):
-    """
-    Follow the line of steepest descent.
-        mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
-    """
+def update_mus(f, mus0, hists, padd_factor = 1, normalise = True):
     mus = mus0.copy()
+
+    # calculate the cross-correlation of hists and F
+    cor   = np.fft.rfftn(hists.astype(np.float64), axes=(-1, ))
+    cor   = cor * np.conj(np.fft.rfft(np.log(f + 1.0e-10)))
+
+    # interpolation factor
+    padd_factor = 1
+    if padd_factor != 0 and padd_factor != 1 :
+        cor   = np.concatenate((cor, np.zeros( (cor.shape[0], cor.shape[1] -1), dtype=cor.dtype)), axis=-1)
+        check = np.concatenate((check, np.zeros( (check.shape[0], check.shape[1] -1), dtype=check.dtype)), axis=-1)
+
+    cor  = np.fft.irfftn(cor, axes=(-1, ))
+
+    mus = []
+    for m in range(cor.shape[0]):
+        mu = np.argmax(cor[m])
+        # map to shift coord
+        mu = cor.shape[1] * np.fft.fftfreq(cor.shape[1])[mu]
+        mus.append(mu / float(padd_factor))
     
-    # go to Fourier space
-    muhat = np.fft.rfft(mus)[1 :]
+    mus = np.array(mus)
     
-    for i in range(iters):
-        # print the error
-        print i, 'log likelihood error', ut.log_likelihood_calc(f, mus, hists)
-
-        # calculate the descent direction
-        grad = -grad_calc(f, muhat, hists)
-        grad = grad / np.sqrt( np.sum( np.abs(grad)**2 ) ) 
-        
-        # perform the line minimisation in this direction
-        eprime_alpha = lambda alpha : ut.mu_directional_derivative(grad, f, muhat + grad * alpha, hists, prob_tol = 1.0e-10)
-        alpha        = ut.mu_bisection(eprime_alpha)
-
-        muhat = muhat + grad * alpha
-        mus   = ut.make_f_real(muhat)
-
+    if normalise :
+        mus = mus - np.sum(mus)/float(len(mus))
+     
     error = ut.log_likelihood_calc(f, mus, hists)
     print i+1, 'log likelihood error', error
     return mus, error
@@ -63,7 +65,7 @@ def update_mus(f, mus0, hists, grad_calc, iters = 1):
 if __name__ == '__main__':
     # forward model 
     #--------------
-    hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 100, sigma_f = 5., sigma_mu = 20., size = 200)
+    hists, M, I, mus_god, F = fm.forward_model(I = 250, M = 1000, sigma_f = 5., sigma_mu = 20., size = 200)
     #
     # f smoothness constraint sigma (pixels)
     f_sig = 0.
@@ -89,7 +91,7 @@ if __name__ == '__main__':
     #-------------
     errors = []
     for i in range(10):
-        mus_t, e = update_mus(f, mus, hists, ut.jacobian_mus_calc, iters=2)
+        mus_t, e = update_mus(f, mus, hists)
         f_t, e   = update_fs(f, mus, hists)
         #
         mus = mus_t
@@ -102,7 +104,7 @@ if __name__ == '__main__':
     hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
 
     # display
-    if False :
+    if True :
         import pyqtgraph as pg
         import PyQt4.QtGui
         import PyQt4.QtCore
@@ -138,3 +140,8 @@ if __name__ == '__main__':
                 hplots[-1].plot(hists1[m], pen = (0, 255, 0))
                 hplots[-1].setXLink('f')
             win.nextRow()
+        
+        win.nextRow()
+        
+        p3 = win.addPlot(title="log likelihood error", y = errors)
+        p3.showGrid(x=True, y=True) 
