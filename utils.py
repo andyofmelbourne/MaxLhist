@@ -129,7 +129,7 @@ def grad_shift_f_real(f, shift):
     return f_shift
 
 
-def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
+def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10, pixelwise = False):
     """
     Calculate the log likelihood error given a probability distribution f,
     a set of shifts mus, the measured histograms for each shift hists.
@@ -156,7 +156,10 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
     log_likelihood_error : float
         The log likelihood error.
     """
-    error = 0.0
+    if pixelwise :
+        error = np.zeros((hists.shape[0]), dtype=np.float64)
+    else :
+        error = 0.0
     for m in range(len(hists)):
         # only look at adu or pixel values that were detected on this pixel
         Is = np.where(hists[m] > 0)
@@ -167,8 +170,11 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10):
 
         # sum the log liklihood errors for this pixel
         e  = hists[m, Is] * np.log(prob_tol + fs)
-        error += np.sum(e)
-    return -error
+        if pixelwise :
+            error[m] = -np.sum(e)
+        else :
+            error -= np.sum(e)
+    return error
 
 
 def mu_transform(h):
@@ -309,3 +315,50 @@ def jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10):
     sys.exit()
     """
     return grad
+
+# update
+def update_fs(f0, mus, hists):
+    """
+    Follow the line of steepest descent.
+        mus_i = mus_i-1 - 0.5 * grad_calc(mus_i-1)
+    """
+    f = f0.copy()
+
+    h = np.zeros( f.shape, dtype=f.dtype)
+    for m in range(len(mus)) :
+        h += roll_real(hists[m].astype(np.float64), - mus[m])
+    # generate a mask for the gradient vector
+    mask = (h >= 1.0)
+    f = mask * h
+    f = f / np.sum(f)
+    
+    return f
+
+def update_mus(f, mus0, hists, padd_factor = 1, normalise = True):
+    mus = mus0.copy()
+
+    # calculate the cross-correlation of hists and F
+    cor   = np.fft.rfftn(hists.astype(np.float64), axes=(-1, ))
+    cor   = cor * np.conj(np.fft.rfft(np.log(f + 1.0e-10)))
+
+    # interpolation factor
+    padd_factor = 1
+    if padd_factor != 0 and padd_factor != 1 :
+        cor   = np.concatenate((cor, np.zeros( (cor.shape[0], cor.shape[1] -1), dtype=cor.dtype)), axis=-1)
+        check = np.concatenate((check, np.zeros( (check.shape[0], check.shape[1] -1), dtype=check.dtype)), axis=-1)
+
+    cor  = np.fft.irfftn(cor, axes=(-1, ))
+
+    mus = []
+    for m in range(cor.shape[0]):
+        mu = np.argmax(cor[m])
+        # map to shift coord
+        mu = cor.shape[1] * np.fft.fftfreq(cor.shape[1])[mu]
+        mus.append(mu / float(padd_factor))
+    
+    mus = np.array(mus)
+    
+    if normalise :
+        mus = mus - np.sum(mus)/float(len(mus))
+     
+    return mus
