@@ -40,3 +40,5 @@ data0 = {
 result = MaxLhist.refine([data0], iterations=10)
 
 result.dump_to_h5(fnam = 'example/darkcal.h5')
+
+result.show_fit('electronic noise', hist)

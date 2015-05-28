@@ -145,5 +145,60 @@ class Result():
         recurse(self.result, f)
 
         f.close()
+    
+    def show_fit(self, varname, hists):
+        errors = self.result['error vs iter']
+        
+        for e in self.result[varname]['elements'] :
+            if e['type'] == 'function':
+                f_name = e['name']
+                f0 = e['initial guess']
+                f  = e['values']
+            
+            if e['type'] == 'offset':
+                mus_name = e['name']
+                mus0 = e['initial guess']
+                mus  = e['values']
 
-                
+        hists0 = fm.forward_hists(f0, mus0, np.sum(hists[0]))
+        hists1 = fm.forward_hists(f, mus, np.sum(hists[0]))
+        
+        i_range = np.arange(hists.shape[1])
+        
+        import pyqtgraph as pg
+        import PyQt4.QtGui
+        import PyQt4.QtCore
+        # Always start by initializing Qt (only once per application)
+        app = PyQt4.QtGui.QApplication([])
+        # Define a top-level widget to hold everything
+        win = pg.GraphicsWindow(title="results")
+        pg.setConfigOptions(antialias=True)
+        
+        # show f and the mu values
+        p1 = win.addPlot(title=f_name)
+        p1.plot(x = i_range, y = f0, pen=(255, 0, 0), name = 'f0')
+        p1.plot(x = i_range, y = f, pen=(0, 255, 0), name = 'f')
+        
+        p2 = win.addPlot(title=mus_name)
+        p2.plot(mus0, pen=(255, 0, 0), name = 'mus0')
+        p2.plot(mus, pen=(0, 255, 0), name = 'mus')
+        
+        win.nextRow()
+        
+        # now plot the histograms
+        hplots = []
+        for i in range(8 / 2):
+            for j in range(2):
+                m = 2 * i + j
+                hplots.append(win.addPlot(title="histogram pixel " + str(m), y = hists[m], name = 'hist' + str(m), fillLevel = 0.0, fillBrush = 0.7, stepMode = True))
+                hplots[-1].plot(hists0[m], pen = (255, 0, 0))
+                hplots[-1].plot(hists1[m], pen = (0, 255, 0))
+                hplots[-1].setXLink('f')
+            win.nextRow()
+        
+        win.nextRow()
+        
+        p3 = win.addPlot(title="log likelihood error", y = errors)
+        p3.showGrid(x=True, y=True) 
+        sys.exit(app.exec_())
+            
