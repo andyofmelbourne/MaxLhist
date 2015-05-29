@@ -176,8 +176,9 @@ class Result():
         mus  = var['offset']['values']
 
         N = np.sum(data['histograms'], axis=1)
-        #hists0 = fm.forward_hists(f0, mus0, N)
         hists1 = fm.forward_hists(f, mus, N)
+
+        m_sort = np.argsort(p_errors)
         
         i_range = np.arange(data['histograms'].shape[1])
         
@@ -196,8 +197,8 @@ class Result():
         p1.plot(x = i_range, y = f, pen=(0, 255, 0))
         
         p2 = win.addPlot(title=mus_name, name = 'mus')
-        p2.plot(mus0, pen=(255, 0, 0))
-        p2.plot(mus,  pen=(0, 255, 0))
+        p2.plot(mus0[m_sort], pen=(255, 0, 0))
+        p2.plot(mus[m_sort],  pen=(0, 255, 0))
         
         win.nextRow()
         
@@ -205,19 +206,22 @@ class Result():
         m      = 0
         title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset ' + str(int(mus[m]))
         hplot  = win.addPlot(title = title)
-        curve_fit = hplot.plot(hists1[m], pen = (0, 255, 0))
         curve_his = hplot.plot(data['histograms'][m], fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
+        curve_fit = hplot.plot(hists1[m], pen = (0, 255, 0))
         hplot.setXLink('f')
         def replot():
             m = hline.value()
-            curve_fit.setData(hists1[m])
+            m = m_sort[m]
+            title  = "histogram pixel " + str(int(m)) + ' error ' + str(int(p_errors[m])) + ' offset ' + str(int(mus[m]))
+            hplot.setTitle(title)
             curve_his.setData(data['histograms'][m])
+            curve_fit.setData(hists1[m])
         
         p3 = win.addPlot(title='pixel errors', name = 'p_errors')
-        p3.plot(p_errors, pen=(255, 255, 255))
+        p3.plot(p_errors[m_sort], pen=(255, 255, 255))
         p3.setXLink('mus')
 
-        hline = pg.InfiniteLine(angle=90, movable=True)
+        hline = pg.InfiniteLine(angle=90, movable=True, bounds = [0, mus.shape[0]-1])
         #hline.sigPositionChangeFinished.connect(replot)
         hline.sigPositionChanged.connect(replot)
         p3.addItem(hline)
