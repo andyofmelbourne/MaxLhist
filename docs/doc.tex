@@ -541,7 +541,32 @@ Magic! Now our choice of $f_0$ as the normalisation term has no effect on the $f
 
 
 \subsection{$\mu$ The offset's or dark values (again)}
-This makes me wonder if we cannot do something similar with the $\mu$'s. 
+This makes me wonder if we cannot do something similar with the $\mu$'s. Let's go back and do it in real space. Initially I will not keep the $\mu$'s normalised to zero:
+\begin{align}
+   \frac{\partial \varepsilon(\mu, f)}{\partial \mu_n} &=-\sum_m^M  \frac{\partial \mu_m}{\partial \mu_n} \sum_i^I \frac{h^m_i}{f(i - \mu_m)} \times f'_{i-\mu_m} \\
+   &=-\sum_i^I \frac{h^n_i}{f(i - \mu_n)} \times f'_{i-\mu_n} \\
+   &=-\sum_i^I h^n_{i+\mu_n} \frac{f'_i}{f_i}       
+   \label{mu_grad_real}
+\end{align}
+
+This is nothing but the cross-correlation function between $h^n_{i}$ and $\frac{f'_i}{f_i}$ but evaluated on the adu (or $i$) grid. This means that we can use fast Fourier transforms to sample all of the overlap values. The only downside is that if we want more than integeter precision we will need to interpolate $h$ and $f/f'$ onto a finer grid. Another concern is that if there is no overlap at all between $h$ and $f/f'$ then the gradient will be zero (as before). We can fix this by calculating:
+\begin{align}
+   \sum_i^I h^n_{i+\mu_n} f_i
+\end{align}
+
+and only accept values of $\mu$ for which this function is non-zero.
+
+Actually this is even easier we can just use:
+\begin{align}
+   \varepsilon(\mu_n, f_i) &= -\sum_m^M \sum_i^I h^m_i \ln(f(i - \mu_m))\\
+                           &= -\sum_m^M \sum_i^I h^m_{i + \mu_m} \ln(f_i)
+\end{align}
+but since we are treating each $\mu$ value as linearly independent this reduces to finding the maximum value of:
+\begin{align}
+    \sum_i^I h^m_{i + \mu_m} \ln(f_i)
+\end{align}
+for each $m$ independently. 
+
 
 \end{document}
 
