@@ -176,6 +176,27 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10, pixelwise = False):
             error -= np.sum(e)
     return error
 
+def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
+    """
+    """
+    from scipy.special import gammaln
+    error = np.zeros((hists.shape[0]), dtype=np.float64)
+    for m in range(len(hists)):
+        # only look at adu or pixel values that were detected on this pixel
+        Is = np.where(hists[m] > 0)
+        
+        # evaluate the shifted probability function
+        fs = roll_real(f, mus[m])[Is] 
+        fs[np.where(fs < 0)] = 0.0
+
+        # sum the log liklihood errors for this pixel
+        e  = hists[m, Is] * np.log(prob_tol + fs)
+
+        # calculate the combinatorial term
+        c = gammaln(np.sum(hists[m]) + 1) - np.sum(gammaln(hists[m] + 1))
+         
+        error[m] = -np.sum(e) - c
+    return error
 
 def mu_transform(h):
     """

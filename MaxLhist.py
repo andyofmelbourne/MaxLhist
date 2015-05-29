@@ -128,8 +128,8 @@ class Result():
         self.result[data['name']]['vars']    = var['name']
         self.result[data['name']]['comment'] = data['comment']
 
-        pixel_map_errors = ut.log_likelihood_calc(var['function']['values'], \
-                var['offset']['values'], data['histograms'], pixelwise=True)
+        pixel_map_errors = ut.log_likelihood_calc_pixelwise(var['function']['values'], \
+                var['offset']['values'], data['histograms'])
 
         self.result[data['name']]['pix_errors'] = pixel_map_errors
 
