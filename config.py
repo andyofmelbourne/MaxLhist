@@ -10,35 +10,22 @@ f    = h5py.File('example/dark_hist_example.h5', 'r')
 hist = f['data'].value
 f.close()
 
-shifts = {
-        'name'          : 'dark offset',
-        'type'          : 'offset',
-        'update'        : True,
-        'initial guess' : None
-        }
-
-dark_dist = {
-        'name'          : 'dark shape',
-        'type'          : 'function',
-        'update'        : True,
-        'initial guess' : None
-        }
-
 background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
-        'update'    : True,
-        'elements'  : [shifts, dark_dist]
+        'offset'    : {'update': True, 'init' : None},
+        'function'  : {'update': True, 'init' : None},
         }
 
-data0 = {
+data = {
         'name'       : 'dark run',
         'histograms' : hist,
-        'vars'       : [background]
+        'vars'       : [background], 
+        'comment'    : 'example/dark_hist_example.h5'
         }
 
-result = MaxLhist.refine([data0], iterations=10)
+result = MaxLhist.refine([data], iterations=10)
 
 result.dump_to_h5(fnam = 'example/darkcal.h5')
 
-result.show_fit('electronic noise', hist)
+result.show_fit(data)
