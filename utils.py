@@ -355,7 +355,7 @@ def update_fs(f0, mus, hists):
     
     return f
 
-def update_mus(f, mus0, hists, padd_factor = 1, normalise = True):
+def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True):
     mus = mus0.copy()
 
     # calculate the cross-correlation of hists and F
@@ -371,10 +371,15 @@ def update_mus(f, mus0, hists, padd_factor = 1, normalise = True):
     cor  = np.fft.irfftn(cor, axes=(-1, ))
 
     mus = []
+    fftfreq = cor.shape[1] * np.fft.fftfreq(cor.shape[1])
     for m in range(cor.shape[0]):
         mu = np.argmax(cor[m])
         # map to shift coord
-        mu = cor.shape[1] * np.fft.fftfreq(cor.shape[1])[mu]
+        if quadfit :
+            mus_t = fftfreq[mu-1 : mu + 2]
+            vs    = cor[m]
+        else :
+            mu = fftfreq[mu]
         mus.append(mu / float(padd_factor))
     
     mus = np.array(mus)
