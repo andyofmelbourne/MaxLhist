@@ -373,13 +373,25 @@ def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True
     mus = []
     fftfreq = cor.shape[1] * np.fft.fftfreq(cor.shape[1])
     for m in range(cor.shape[0]):
-        mu = np.argmax(cor[m])
+        mu_0 = np.argmax(cor[m])
         # map to shift coord
         if quadfit :
-            mus_t = fftfreq[mu-1 : mu + 2]
-            vs    = cor[m]
+            mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[1]
+            mus_t = fftfreq[mus_0]
+            vs    = cor[m][mus_0]
+            #print mu_0-1 , mu_0, mu_0 + 2
+            #print mus_t
+            #print vs
+            p     = np.polyfit(mus_t, vs, 2)
+            # evaluate the maximum
+            mu = - p[1] / (2. * p[0])
+            if (mu > mus_t[0]) and (mu < mus_t[-1]) and (p[0] < 0) :
+                pass
+            else :
+                print 'quadratic fit failed', mu_0, mu, mus_t #p
+                mu = fftfreq[mu_0]
         else :
-            mu = fftfreq[mu]
+            mu = fftfreq[mu_0]
         mus.append(mu / float(padd_factor))
     
     mus = np.array(mus)
