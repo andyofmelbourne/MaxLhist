@@ -204,7 +204,7 @@ class Result():
         
         # now plot the histograms
         m      = 0
-        title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset ' + str(int(mus[m]))
+        title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
         hplot  = win.addPlot(title = title)
         curve_his = hplot.plot(data['histograms'][m], fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
         curve_fit = hplot.plot(hists1[m], pen = (0, 255, 0))
@@ -212,7 +212,7 @@ class Result():
         def replot():
             m = hline.value()
             m = m_sort[m]
-            title  = "histogram pixel " + str(int(m)) + ' error ' + str(int(p_errors[m])) + ' offset ' + str(int(mus[m]))
+            title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
             hplot.setTitle(title)
             curve_his.setData(data['histograms'][m])
             curve_fit.setData(hists1[m])
