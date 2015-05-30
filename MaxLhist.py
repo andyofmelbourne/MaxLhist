@@ -206,7 +206,7 @@ class Result():
         m      = 0
         title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
         hplot  = win.addPlot(title = title)
-        curve_his = hplot.plot(data['histograms'][m], fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
+        curve_his = hplot.plot(data['histograms'][m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
         curve_fit = hplot.plot(hists1[m], pen = (0, 255, 0))
         hplot.setXLink('f')
         def replot():

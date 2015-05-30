@@ -553,7 +553,6 @@ This is nothing but the cross-correlation function between $h^n_{i}$ and $\frac{
 \begin{align}
    \sum_i^I h^n_{i+\mu_n} f_i
 \end{align}
-
 and only accept values of $\mu$ for which this function is non-zero.
 
 Actually this is even easier we can just use:
@@ -566,6 +565,47 @@ but since we are treating each $\mu$ value as linearly independent this reduces 
     \sum_i^I h^m_{i + \mu_m} \ln(f_i)
 \end{align}
 for each $m$ independently. 
+
+
+\subsection{Two random variables}
+Now suppose we have two random variables, say, a background and single photon distribution. In this case we should let the relative amplitude of the distributions vary (because we don't have the same number of photons at each pixel). Our log likelihood error is then:
+\begin{align}
+   \varepsilon(\mu_n, f^m_i) &= -\sum_m^M \sum_i^I h^m_i \ln(f^m(i - \mu_m)) = -\sum_m^M \sum_i^I h^m_{i+\mu_m} \ln(f^m_i) \\
+   &= -\sum_m^M \sum_i^I h^m_{i+\mu_m} \ln((1-n^m)d_i + n^m s_i)
+\end{align}
+were $d_i$ is the dark (or background) distribution at count or adu or $x$ value $i$, $s_i$ is the single photon distribution and $n^m$ is the number of photons at pixel $m$. 
+
+Let's begin by minimising $\varepsilon(\mu_n, f^m_i)$ with respect to $d$, assuming that we know the $\mu$'s and $s_i$'s:
+\begin{align}
+   \frac{\partial \varepsilon(\mu_n, f^m_i)}{\partial d_j} &= -\sum_m^M \sum_i^I h^m_{i+\mu_m} \frac{1}{f^m_i} \frac{\partial f^m_i}{\partial d_j} \\
+   &= -\sum_m^M \sum_i^I h^m_{i+\mu_m} \frac{1}{f^m_i}(1-n^m)(-\delta_{i} + \delta_{j-i}) \\
+   &= \sum_m^M (1-n^m) \frac{ h^m_{0+\mu_m}}{f^m_0}-\sum_m^M (1-n^m) \frac{ h^m_{j+\mu_m}}{f^m_j} 
+   \label{d_twovar}
+\end{align}
+where :
+\begin{align}
+   \frac{\partial f^m_i}{\partial d_j} &= \frac{\partial }{\partial d_j} \left[ (1-n^m)\delta_{i} (1 - \sum_{k=1}^I d_k) + (1-n^m)\sum_{k=1}^I \delta_{k-i} d_k + n^m s_i\right] \\
+   &= (1-n^m)(-\delta_{i} + \delta_{j-i})
+\end{align}
+
+Ok so Eq. (\ref{d_twovar}) looks a little tricky. Why don't we try to solve it for the case of a single pixel:
+\begin{align}
+   (1-n^m) \frac{ h^m_{0+\mu_m}}{f^m_0} &= (1-n^m) \frac{ h^m_{j+\mu_m}}{f^m_j}  \\
+   \therefore \frac{ h^m_{0+\mu_m}}{f^m_0} &= \frac{ h^m_{j+\mu_m}}{f^m_j}  \\
+   \therefore f^m_j &= h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} \\
+   \therefore (1-n^m)d_j + n^m s_j &= h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} \\
+   \therefore d_j &= \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
+\end{align}
+and now for $d_0$
+\begin{align}
+   \therefore d_0 &= 1 - \sum_{j=1} d_j \\
+   &=1 - \sum_{j=1} \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
+   &=1 - \sum_{j=1} \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{(1-n^m)d_0 + n^m s_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
+\therefore d_0 \left(1 + \frac{\sum_{j=1} h^m_{j+\mu_m}}{h^m_{0+\mu_m}}\right)  &=1 - \frac{n^m}{(1-n^m)}\left(\frac{\sum_{j=1} h^m_{j+\mu_m} }{ h^m_{0+\mu_m}} s_0 - s_j\right) \\
+\end{align}
+
+
+
 
 
 \end{document}
