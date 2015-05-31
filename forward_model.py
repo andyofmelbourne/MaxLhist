@@ -2,6 +2,51 @@ import numpy as np
 import scipy.stats
 import utils as ut
 
+def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50):
+    """
+    """
+    # the "adu" range
+    i      = np.arange(0, I, 1)
+    i_bins = np.arange(0, I+1, 1)
+    
+    # the probability function or "background"
+    d = np.exp( - (i - 100).astype(np.float64)**2 / (2. * sigma_d**2)) 
+    d = d / np.sum(d)
+    D = scipy.stats.rv_discrete(name='background', values = (i, d))
+
+    # the probability function for the single photon 
+    s = np.exp( - (i - 100 - ds).astype(np.float64)**2 / (2. * sigma_s**2)) 
+    s = s / np.sum(s)
+    S = scipy.stats.rv_discrete(name='background', values = (i, s))
+    
+    # the probability function for the number of single photons
+    Nm = scipy.stats.uniform(loc = 0, scale = sigma_nm)
+
+    # the probability function for the offsets or "dark values"
+    MU = scipy.stats.norm(loc = 0.0, scale = sigma_mu)
+    
+    # make some histograms
+    hists = []
+    mus = MU.rvs(M)
+    mus = mus - np.mean(mus)
+    #
+    nms = np.abs(Nm.rvs(M))
+    for n in range(M):
+        mu = mus[n]
+        nm = nms[n]
+        
+        # create a new random variable with the shifted background
+        f_shift = ut.roll_real((1. - nm) * d + nm * s, mu) 
+        F_shift = scipy.stats.rv_discrete(name='background', values = (i, f_shift))
+        ff = F_shift.rvs(size = size)
+        hist, bins = np.histogram(ff, bins = i_bins)
+        hists.append(hist)
+    hists = np.array(hists)
+    mus   = np.array(mus)
+    nms   = np.array(nms)
+    
+    return hists, M, I, mus, nms, D, S
+
 def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20., size = 50):
     """
     The forward model should produce:
@@ -49,6 +94,16 @@ def forward_hists(f, mus, N):
     hists = np.zeros(mus.shape + f.shape, dtype=f.dtype)
     for i in range(hists.shape[0]):
         hists[i] = ut.roll_real(f, mus[i]) 
+    if type(N) is int : 
+        hists = hists * N
+    else :
+        hists = (hists.T * N).T
+    return hists
+
+def forward_hists_twovar(d, s, nms, mus, N):
+    hists = np.zeros(mus.shape + d.shape, dtype=d.dtype)
+    for i in range(hists.shape[0]):
+        hists[i] = ut.roll_real((1. - nms[i]) * d + nms[i] * s, mus[i]) 
     if type(N) is int : 
         hists = hists * N
     else :
