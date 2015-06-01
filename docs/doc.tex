@@ -588,52 +588,31 @@ where :
    &= (1-n^m)(-\delta_{i} + \delta_{j-i})
 \end{align}
 
-Ok so Eq. (\ref{d_twovar}) looks a little tricky. Why don't we try to solve it for the case of a single pixel:
+Ok so Eq. (\ref{d_twovar}) looks a little tricky. Let us suppose that the solution to Eq. (\ref{d_twovar}) is unique. In this case any solution that we come up with is the sulution. At first glance we might be tempted to make both terms zero (i.e. set $f^m_j \rightarrow \infty$) but then of course $f$ is not normalised. What if $f^m_j$ was independent of $m$? How about we set $f^m_j$ equal to it's average in $m$. That is, maybe the solution to Eq. (\ref{d_twovar}) only cares about the average of $f$ on $m$ and not about local fluctuations from pixel to pixel:
 \begin{align}
-   (1-n^m) \frac{ h^m_{0+\mu_m}}{f^m_0} &= (1-n^m) \frac{ h^m_{j+\mu_m}}{f^m_j}  \\
-   \therefore \frac{ h^m_{0+\mu_m}}{f^m_0} &= \frac{ h^m_{j+\mu_m}}{f^m_j}  \\
-   \therefore f^m_j &= h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} \\
-   \therefore (1-n^m)d_j + n^m s_j &= h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} \\
-   \therefore d_j &= \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
+   f^m_j &\rightarrow f_j = \frac{1}{M}\sum_m \left[ (1-n^m)d_j + n^m s_j \right] 
 \end{align}
-and now for $d_0$
+I possit that this might be the solution:
 \begin{align}
-   \therefore d_0 &= 1 - \sum_{j=1} d_j \\
-   &=1 - \sum_{j=1} \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
-   &=1 - \sum_{j=1} \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{(1-n^m)d_0 + n^m s_0}{ h^m_{0+\mu_m}} - n^m s_j\right) \\
-\therefore d_0 \left(1 + \frac{\sum_{j=1} h^m_{j+\mu_m}}{h^m_{0+\mu_m}}\right)  &=1 - \frac{n^m}{(1-n^m)}\left(\frac{\sum_{j=1} h^m_{j+\mu_m} }{ h^m_{0+\mu_m}} s_0 - \sum_{j=1} s_j\right) \\
-\therefore d_0 \frac{\sum_{j=0} h^m_{j+\mu_m}}{h^m_{0+\mu_m}}  &=1 - \frac{n^m}{(1-n^m)}\left(\frac{\sum_{j=1} h^m_{j+\mu_m} }{ h^m_{0+\mu_m}} s_0 - (1-s_0)\right) \\
-\therefore d_0 \frac{\sum_{j=0} h^m_{j+\mu_m}}{h^m_{0+\mu_m}}  &=1 - \frac{n^m}{(1-n^m)}\left(\left[ \frac{\sum_{j=1} h^m_{j+\mu_m} }{ h^m_{0+\mu_m}} + 1\right]s_0 - 1\right) \\
-\therefore d_0 \frac{\sum_{j=0} h^m_{j+\mu_m}}{h^m_{0+\mu_m}}  &=1 - \frac{n^m}{(1-n^m)}\left(\frac{\sum_{j=0} h^m_{j+\mu_m} }{ h^m_{0+\mu_m}}s_0 - 1\right) \\
-\therefore d_0  &=\frac{1}{(1-n^m)} \frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}} - \frac{n^m}{(1-n^m)}s_0
-\end{align}
-Wow, ok, so now we know $f^m_0$:
-\begin{align}
-   f^m_0 &= (1-n^m)d_0 + n^m s_0 \\
-         &= (1-n^m)\left[ \frac{1}{(1-n^m)} \frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}} - \frac{n^m}{(1-n^m)}s_0\right] + n^m s_0 \\
-         &= \left[\frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}} - n^m s_0\right] + n^m s_0 \\
-         &= \frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}} 
-\end{align}
-But I guess we already knew that. 
-Moving on:
-\begin{align}
-   f^m_j &= h^m_{j+\mu_m} \frac{f^m_0}{ h^m_{0+\mu_m}} \\
-   &= h^m_{j+\mu_m} \frac{1}{ h^m_{0+\mu_m}} \frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}} \\
-   &= \frac{h^m_{j+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}}
-\end{align}
-and...
-\begin{align}
-   d^m_j &= \frac{1}{(1-n^m)}\left(h^m_{j+\mu_m} \frac{1}{ h^m_{0+\mu_m}}\frac{h^m_{0+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}}  - n^m s_j\right) \\
-   &= \frac{1}{(1-n^m)}\left(\frac{h^m_{j+\mu_m}}{\sum_{j=0} h^m_{j+\mu_m}}  - n^m s_j\right)
-\end{align}
-I suspect that the global solution is:
-\begin{align}
-   d_j &= \frac{\sum_m d^m_j}{\sum_m \sum_j d^m_j}
+   f_j &= \frac{\sum_m (1-n^m)h^m_{j+\mu_m}}{\sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m}}
 \end{align}
 
-So let's test it:
+Substituting into Eq. (\ref{d_twovar}):
+\begin{align}
+   \frac{\partial \varepsilon(\mu_n, f^m_i)}{\partial d_j} &= \sum_m^M (1-n^m) \frac{ h^m_{0+\mu_m}}{f^m_0}-\sum_m^M (1-n^m) \frac{ h^m_{j+\mu_m}}{f^m_j} \\
+   &=  \left(\sum_m^M (1-n^m) h^m_{0+\mu_m}\right) \frac{\sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m}}{\sum_m (1-n^m)h^m_{0+\mu_m}} \\
+   & - \left(\sum_m^M (1-n^m) h^m_{j+\mu_m}\right) \frac{\sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m}}{\sum_m (1-n^m)h^m_{j+\mu_m}} \\
+   &=  \sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m} - \sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m} \\
+   &= 0
+\end{align}
+More magic! Now we have our answer:
+\begin{align}
+   \frac{1}{M}\sum_m \left[ (1-n^m)d_j + n^m s_j \right] &= \frac{\sum_m (1-n^m)h^m_{j+\mu_m}}{\sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m}} \\
+   \therefore d_j &= \frac{1}{\langle 1-n^m \rangle}\left[\frac{\sum_m (1-n^m)h^m_{j+\mu_m}}{\sum_{j}\sum_m (1-n^m) h^m_{j+\mu_m}} - \langle n^m \rangle s_j \right] 
+\end{align}
+where $\langle n^m \rangle = \sum_m n^m / M$. Looking at this, it seems to take a weighted sum of the histograms, normalises and then subtracts the expected value of the single photon distribution. This is then scaled by the expected amplitude of the dark distribution, then bam, solution. If we make the substitutions $n^m \leftrightarrow 1-n^m$ and $d \leftrightarrow s$ then we also have the solution of $s_j$ in terms of $d_j$. 
 
-
+Actually we now have the solution for an arbitrary number of random variables by recursion!
 
 
 
