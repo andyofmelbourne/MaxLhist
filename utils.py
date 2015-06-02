@@ -416,7 +416,7 @@ def update_fs_many(var, ds):
     mask = (h >= 1.0)
     f = mask * h
     f = f / np.sum(f)
-
+    
     dout = float(hist.shape[0] * len(ds)) * f.copy()
     nd   = 0.0
     # subtract the other stuff
