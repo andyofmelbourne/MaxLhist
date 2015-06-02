@@ -180,9 +180,18 @@ def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
     for d in datas:
         hists = d['histograms']
         mus   = d['offset']['value']
-        f     = d['vars'][0]['function']['value']
-        error += log_likelihood_calc(f, mus, hists, prob_tol = prob_tol)
-    return error
+        for m in range(len(hists)):
+            f  = forward_fs(d, m)
+            Is = np.where(hists[m] > 0)
+            
+            # evaluate the shifted probability function
+            fs = roll_real(f, mus[m])[Is] 
+            fs[np.where(fs < 0)] = 0.0
+
+            # sum the log liklihood errors for this pixel
+            e  = hists[m, Is] * np.log(prob_tol + fs)
+            error += np.sum(e)
+    return -error
 
 def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
     """
@@ -207,10 +216,28 @@ def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
     return error
 
 def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
-    f     = d['vars'][0]['function']['value']
     mus   = d['offset']['value']
     hists = d['histograms']
-    error = log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = prob_tol)
+    
+    from scipy.special import gammaln
+    error = np.zeros((hists.shape[0]), dtype=np.float64)
+    for m in range(len(hists)):
+        f  = forward_fs(d, m)
+        
+        # only look at adu or pixel values that were detected on this pixel
+        Is = np.where(hists[m] > 0)
+        
+        # evaluate the shifted probability function
+        fs = roll_real(f, mus[m])[Is] 
+        fs[np.where(fs < 0)] = 0.0
+
+        # sum the log liklihood errors for this pixel
+        e  = hists[m, Is] * np.log(prob_tol + fs)
+
+        # calculate the combinatorial term
+        c = gammaln(np.sum(hists[m]) + 1) - np.sum(gammaln(hists[m] + 1))
+         
+        error[m] = -np.sum(e) - c
     return error
 
 def mu_transform(h):
@@ -377,17 +404,37 @@ def update_fs_many(var, ds):
     
     h = np.zeros( f.shape, dtype=f.dtype)
     for d in ds:
-        hist = d['histograms']
-        mus  = d['offset']['value']
+        hist   = d['histograms']
+        mus    = d['offset']['value']
+        print var['name'], [v['name'] for v in d['vars']]
+        vi     = np.where([var is vt for vt in d['vars']])[0][0]
         for m in range(len(mus)) :
-            h += roll_real(hist[m].astype(np.float64), - mus[m])
+            ns = d['counts'][vi][m] / np.sum(hist[m].astype(np.float64))
+            h += ns * roll_real(hist[m].astype(np.float64), - mus[m])
+        
     # generate a mask
     mask = (h >= 1.0)
     f = mask * h
     f = f / np.sum(f)
-    
-    return f
 
+    dout = float(hist.shape[0] * len(ds)) * f.copy()
+    nd   = 0.0
+    # subtract the other stuff
+    for d in ds:
+        hist   = d['histograms']
+        mus    = d['offset']['value']
+        for v in d['vars']:
+            if v is not var:
+                vi = np.where([v is vt for vt in d['vars']])[0][0]
+                n  = 0.0
+                for m in range(len(mus)) :
+                    n  += d['counts'][vi][m] / np.sum(hist[m].astype(np.float64))
+                
+                dout -= n * v['function']['value']
+    
+    dout[np.where(dout < 0)] = 0.0
+    dout = dout / np.sum(dout)
+    return dout
 
 def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True):
     mus = mus0.copy()
@@ -443,26 +490,30 @@ def update_mus_many(offset, ds, normalise = True, quadfit = True):
     # calculate the cross-correlation of hists and F
     hshape = ds[0]['histograms'].shape
     if hshape[-1] % 2 == 0 :
-        cor_shape = (hshape[0], hshape[1] / 2 + 1 )
+        cor_shape = (hshape[1] / 2 + 1, )
     else :
-        cor_shape = (hshape[0], (hshape[1]+1) / 2 )
-
-    cor = np.zeros(cor_shape, dtype=np.complex128)
+        cor_shape = ((hshape[1]+1) / 2, )
+    cor_t = np.zeros(cor_shape, dtype=np.complex128)
     
-    for d in ds:
-        temp  = np.fft.rfftn(d['histograms'].astype(np.float64), axes=(-1, ))
-        cor  += temp * np.conj(np.fft.rfft(np.log(d['vars'][0]['function']['value'] + 1.0e-10)))
+    fftfreq = hshape[1] * np.fft.fftfreq(hshape[1])
+    for m in range(hshape[0]):
         
-    cor  = np.fft.irfftn(cor, axes=(-1, ))
-    
-    fftfreq = cor.shape[1] * np.fft.fftfreq(cor.shape[1])
-    for m in range(cor.shape[0]):
-        mu_0 = np.argmax(cor[m])
+        # calculate the cross-correlation bw hist and f
+        cor_t.fill(0.0)
+        for d in ds:
+            # generate the forward model of the distributions for this dataset but without the shifts
+            f_i = forward_fs(d, m)
+            
+            temp   = np.fft.rfft(d['histograms'][m].astype(np.float64))
+            cor_t += temp * np.conj(np.fft.rfft(np.log(f_i + 1.0e-10)))
+        cor  = np.fft.irfft(cor_t)
+        
+        mu_0 = np.argmax(cor)
         # map to shift coord
         if quadfit :
-            mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[1]
+            mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[0]
             mus_t = fftfreq[mus_0]
-            vs    = cor[m][mus_0]
+            vs    = cor[mus_0]
             p     = np.polyfit(mus_t, vs, 2)
             # evaluate the maximum
             mu = - p[1] / (2. * p[0])
@@ -479,3 +530,9 @@ def update_mus_many(offset, ds, normalise = True, quadfit = True):
         mus = mus - np.sum(mus)/float(len(mus))
      
     return mus
+
+def forward_fs(data, m):
+    f = np.zeros( (data['histograms'].shape[1]), dtype=np.float64)
+    for n in range(len(data['vars'])) :
+        f += data['counts'][n][m] * data['vars'][n]['function']['value']
+    return f / np.sum(f)

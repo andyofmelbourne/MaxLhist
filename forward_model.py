@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats
 import utils as ut
 
-def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50, mus = None):
+def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50, mus = None, nms = None):
     """
     """
     # the "adu" range
@@ -13,7 +13,7 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
     d = np.exp( - (i - 100).astype(np.float64)**2 / (2. * sigma_d**2)) 
     d = d / np.sum(d)
     D = scipy.stats.rv_discrete(name='background', values = (i, d))
-
+    
     # the probability function for the single photon 
     s = np.exp( - (i - 100 - ds).astype(np.float64)**2 / (2. * sigma_s**2)) 
     s = s / np.sum(s)
@@ -21,7 +21,7 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
     
     # the probability function for the number of single photons
     Nm = scipy.stats.uniform(loc = 0, scale = sigma_nm)
-
+    
     # the probability function for the offsets or "dark values"
     MU = scipy.stats.norm(loc = 0.0, scale = sigma_mu)
     
@@ -31,8 +31,9 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
         mus = MU.rvs(M)
         mus = mus - np.mean(mus)
     #
-    nms = np.abs(Nm.rvs(M))
-    nms[:] = 0.2
+    if mus is None :
+        nms = np.abs(Nm.rvs(M))
+    
     for n in range(M):
         mu = mus[n]
         nm = nms[n]
@@ -111,6 +112,15 @@ def forward_hists_twovar(d, s, nms, mus, N):
         hists = hists * N
     else :
         hists = (hists.T * N).T
+    return hists
+
+def forward_hists_nvar(fs, counts, mus):
+    hists   = np.zeros(counts[0].shape + fs[0].shape , dtype=fs[0].dtype)
+    for m in range(hists.shape[0]):
+        f = np.zeros_like(fs[0])
+        for fi in range(len(fs)):
+            f += fs[fi] * counts[fi][m]
+        hists[m] = ut.roll_real(f, mus[m]) 
     return hists
 
 if __name__ == '__main__':
