@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats
 import utils as ut
 
-def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50):
+def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50, mus = None):
     """
     """
     # the "adu" range
@@ -27,8 +27,9 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
     
     # make some histograms
     hists = []
-    mus = MU.rvs(M)
-    mus = mus - np.mean(mus)
+    if mus is None :
+        mus = MU.rvs(M)
+        mus = mus - np.mean(mus)
     #
     nms = np.abs(Nm.rvs(M))
     nms[:] = 0.2
@@ -48,7 +49,7 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
     
     return hists, M, I, mus, nms, D, S
 
-def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20., size = 50):
+def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20., size = 50, mus = None):
     """
     The forward model should produce:
         h^m_i   the histograms or "data"
@@ -75,8 +76,9 @@ def forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20., size = 50):
     
     # make some histograms
     hists = []
-    mus = MU.rvs(M)
-    mus = mus - np.mean(mus)
+    if mus is None :
+        mus = MU.rvs(M)
+        mus = mus - np.mean(mus)
     for n in range(M):
         mu = mus[n]
         

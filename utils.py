@@ -128,7 +128,6 @@ def grad_shift_f_real(f, shift):
     f_shift = np.fft.irfft(fh * ramp)
     return f_shift
 
-
 def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10, pixelwise = False):
     """
     Calculate the log likelihood error given a probability distribution f,
@@ -176,6 +175,15 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10, pixelwise = False):
             error -= np.sum(e)
     return error
 
+def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
+    error = 0.0
+    for d in datas:
+        hists = d['histograms']
+        mus   = d['offset']['value']
+        f     = d['vars'][0]['function']['value']
+        error += log_likelihood_calc(f, mus, hists, prob_tol = prob_tol)
+    return error
+
 def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
     """
     """
@@ -196,6 +204,13 @@ def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
         c = gammaln(np.sum(hists[m]) + 1) - np.sum(gammaln(hists[m] + 1))
          
         error[m] = -np.sum(e) - c
+    return error
+
+def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
+    f     = d['vars'][0]['function']['value']
+    mus   = d['offset']['value']
+    hists = d['histograms']
+    error = log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = prob_tol)
     return error
 
 def mu_transform(h):
@@ -355,6 +370,25 @@ def update_fs(f0, mus, hists):
     
     return f
 
+def update_fs_many(var, ds):
+    """
+    """
+    f = var['function']['value'].copy()
+    
+    h = np.zeros( f.shape, dtype=f.dtype)
+    for d in ds:
+        hist = d['histograms']
+        mus  = d['offset']['value']
+        for m in range(len(mus)) :
+            h += roll_real(hist[m].astype(np.float64), - mus[m])
+    # generate a mask
+    mask = (h >= 1.0)
+    f = mask * h
+    f = f / np.sum(f)
+    
+    return f
+
+
 def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True):
     mus = mus0.copy()
 
@@ -395,6 +429,51 @@ def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True
         mus.append(mu / float(padd_factor))
     
     mus = np.array(mus)
+    
+    if normalise :
+        mus = mus - np.sum(mus)/float(len(mus))
+     
+    return mus
+
+def update_mus_many(offset, ds, normalise = True, quadfit = True):
+    """
+    """
+    mus = offset['value'].copy()
+
+    # calculate the cross-correlation of hists and F
+    hshape = ds[0]['histograms'].shape
+    if hshape[-1] % 2 == 0 :
+        cor_shape = (hshape[0], hshape[1] / 2 + 1 )
+    else :
+        cor_shape = (hshape[0], (hshape[1]+1) / 2 )
+
+    cor = np.zeros(cor_shape, dtype=np.complex128)
+    
+    for d in ds:
+        temp  = np.fft.rfftn(d['histograms'].astype(np.float64), axes=(-1, ))
+        cor  += temp * np.conj(np.fft.rfft(np.log(d['vars'][0]['function']['value'] + 1.0e-10)))
+        
+    cor  = np.fft.irfftn(cor, axes=(-1, ))
+    
+    fftfreq = cor.shape[1] * np.fft.fftfreq(cor.shape[1])
+    for m in range(cor.shape[0]):
+        mu_0 = np.argmax(cor[m])
+        # map to shift coord
+        if quadfit :
+            mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[1]
+            mus_t = fftfreq[mus_0]
+            vs    = cor[m][mus_0]
+            p     = np.polyfit(mus_t, vs, 2)
+            # evaluate the maximum
+            mu = - p[1] / (2. * p[0])
+            if (mu > mus_t[0]) and (mu < mus_t[-1]) and (p[0] < 0) :
+                pass
+            else :
+                print 'quadratic fit failed', mu_0, mu, mus_t #p
+                mu = fftfreq[mu_0]
+        else :
+            mu = fftfreq[mu_0]
+        mus[m] = mu 
     
     if normalise :
         mus = mus - np.sum(mus)/float(len(mus))
