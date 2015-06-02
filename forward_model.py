@@ -31,6 +31,7 @@ def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10.
     mus = mus - np.mean(mus)
     #
     nms = np.abs(Nm.rvs(M))
+    nms[:] = 0.2
     for n in range(M):
         mu = mus[n]
         nm = nms[n]

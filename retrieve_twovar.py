@@ -14,7 +14,7 @@ from scipy.ndimage import gaussian_filter1d
 if __name__ == '__main__':
     # forward model 
     #--------------
-    hists, M, I, mus_god, nms_god, D, S = fm.forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 5., ds = 20., sigma_nm = 0.4, sigma_mu = 10., size = 1000)
+    hists, M, I, mus_god, nms_god, D, S = fm.forward_model_twovars(I = 250, M = 1000, sigma_d = 5., sigma_s = 10., ds = 30., sigma_nm = 0.4, sigma_mu = 10., size = 1000)
 
     # truncate to non-zero measurements
     #----------------------------------
