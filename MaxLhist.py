@@ -6,134 +6,189 @@ from scipy.ndimage import gaussian_filter1d
 import sys
 
 def process_input(datas):
-    """ """
-    # Is there only one dataset?
+    """
+    """
     if len(datas) == 0 :
         print 'no data: nothing to do...'
         sys.exit()
-    elif len(datas) != 1 :
-        print 'I only support one dataset for now...'
-        sys.exit()
-
-    data = datas[0]
     
-    # Is there any histogram data?
-    if not data.has_key('histograms'):
-        print 'Error: no histogram data.'
-        sys.exit()
+    data = datas
     
-    hists = data['histograms']
-
-    # Is there only one random variable?
-    if not data.has_key('vars'):
-        print 'Error: no histogram data.'
-        sys.exit()
-    elif len(data['vars']) != 1 :
-        print 'Error: I only support one random variable for now.'
-        sys.exit()
-
-    var = data['vars'][0]
+    for data in datas:
+        if not data.has_key('histograms'):
+            print 'Error: no histogram data. For', data['name']
+            sys.exit()
+        
+    vars = []
+    for data in datas:
+        if not data.has_key('vars'):
+            print 'Error: no random variable in data', data['name']
+            sys.exit()
+        for var in data['vars']:
+            # check if we already have this in the list
+            add = True
+            for v in vars :
+                if v is var :
+                    add = False
+            # if not then add it
+            if add :
+                vars.append(var)
 
     # The random variable must have a function element
-    if not var.has_key('function'):
-        print 'Error: every random variable must have at least a function element', var['name']
-        sys.exit()
-    elif not var['function'].has_key('update') :
-        print 'Error: the function of', var['name'], 'must have an update variable.'
-        sys.exit()
+    for var in vars :
+        if not var.has_key('function'):
+            print 'Error: every random variable must have at least a function element', var['name']
+            sys.exit()
+        elif not var['function'].has_key('update') :
+            print 'Error: the function of', var['name'], 'must have an update variable.'
+            sys.exit()
 
-    # The random variable must have a shift element
-    if not var.has_key('offset'):
-        print 'Error: every random variable must have at least an offset element', var['name']
-        sys.exit()
-    elif not var['offset'].has_key('update') :
-        print 'Error: the function of', var['name'], 'must have an update variable.'
-        sys.exit()
-    
+    # get the offsets
+    offsets = []
+    for data in datas:
+        if data.has_key('offset'):
+            offset = data['offset']
+            # check if we already have this in the list
+            add = True
+            for o in offsets :
+                if o is offset :
+                    print data['name'] +"'s offset is linked to a previous one. Will update together..."
+                    add = False
+            # if not then add it
+            if add :
+                offsets.append(offset)
+            
+            if not data['offset'].has_key('update') :
+                print 'Error: the offset of', data['name'], 'must have an update variable.'
+                sys.exit()
+        else :
+            print 'Error: every dataset must have an offset element ', data['name']
+            sys.exit()
+
     # inital guess
-    #-------------
-    if var['function'].has_key('init') :
-        f = var['function']['init']
-    else :
-        f = None
+    # Loop over the value elements of vars and 
+    # offsets to initialise the random variables
+    #-------------------------------------------
+    f = np.sum(datas[0]['histograms'].astype(np.float64), axis=0) 
+    f = f / np.sum(f)
     
-    if f is not None :
-        if f.shape[0] != hists.shape[1]:
-            print 'Error:', var['name'],'s initial guess for the function does not have the right shape:', f.shape[0], ' hists.shape[1]=', hists.shape[1]
-            sys.exit()
-    else :
-        print 'initialising', var['name'], 's function with the sum of the histogram data'
-        f = np.sum(hists.astype(np.float64), axis=0) 
-        f = f / np.sum(f)
-
-    if var['offset'].has_key('init') :
-        mus = var['offset']['init']
-    else :
-        mus = None
+    for var in vars:
+        if var['function']['value'] is None :
+            print "initialising", var['name'] + "'s function with the sum of the histogram data"
+            var['function']['value'] = f
+        else :
+            if var['function']['value'].shape[0] != datas['histograms'][0].shape[1]:
+                print "Error:", var['name']+"'s initial guess for the function does not have the right shape:", var['function']['value'].shape[0], ' hists.shape[1]=', f.shape[0]
+                sys.exit()
     
-    if mus is not None :
-        if mus.shape[0] != hists.shape[0]:
-            print 'Error:', var['name'],'s initial guess for the offsets does not have the right shape:', mus.shape[0], ' hists.shape[0]=', hists.shape[0]
-            sys.exit()
-    else :
-        print 'initialising', var['name'], ' offset with the argmax of the histograms.'
-        mus = np.zeros((hists.shape[0]), dtype=np.float64)
-        for m in range(hists.shape[0]):
-            mus[m]   = np.argmax(hists[m]) - np.argmax(f)
-        mus = mus - np.sum(mus) / float(len(mus))
+    for data in datas :
+        if data['offset']['value'] is None :
+            print 'initialising', data['name'] + "'s offset with the argmax of the histograms."
+            hist = data['histograms']
+            mus = np.zeros((hist.shape[0]), dtype=np.float64)
+            for m in range(hist.shape[0]):
+                mus[m]   = np.argmax(hist[m]) - np.argmax(f)
+            mus = mus - np.sum(mus) / float(len(mus))
+            data['offset']['value'] = mus
+        else :
+            if data['offset']['value'].shape[0] != data['histograms'].shape[0]:
+                print "Error:", data['name']+"'s initial guess for the offsets does not have the right shape:", data['offset']['value'].shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
+                sys.exit()
 
-    return mus, f, hists, data, var 
+    # get the counts
+    for data in datas:
+        if not data.has_key('counts'):
+            print 'initialising the counts for', data['name'] + "'s variables with the number of counts / number of vars."
+            nvars  = len(data['vars'])
+            counts = np.sum(data['histograms'], axis=-1).astype(np.float64) / float(nvars) 
+            data['counts'] = [counts.copy() for v in data['vars']]
+        else :
+            for count in data['counts']:
+                if count.shape[0] != data['histograms'].shape[0] :
+                    print "Error:", data['name']+"'s initial guess for the counts does not have the right shape:", count.shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
+                    sys.exit()
+    
+    return offsets, vars, datas
 
 
 def refine(datas, iterations=1):
-    mus, f, hists, data, var = process_input(datas)
-
-    mus0 = mus.copy()
-    f0   = f.copy()
+    offsets, vars, datas = process_input(datas)
     
     # update the guess
-    #-------------
+    #-----------------
     errors = []
-    mus_t  = mus.copy()
-    f_t    = f.copy()
+    offsets_temp   = list(offsets)
+    vars_temp      = list(vars)
+    counts_temp    = []
+    
+    e   = ut.log_likelihood_calc_many(datas)
+    errors.append(e)
+    print 0, 'log likelihood error:', e
+    
     for i in range(iterations):
-        if var['offset']['update'] :
-            mus_t = ut.update_mus(f, mus, hists)
+        # new offsets 
+        for j in range(len(offsets_temp)):
+            if offsets[j]['update'] :
+                # grab all the data that has this offset
+                ds              = [d for d in datas if offsets[j] is d['offset']]
+                
+                offsets_temp[j]['value'] = ut.update_mus_many(offsets_temp[j], ds)
+
+        # new functions 
+        for j in range(len(vars_temp)) :
+            if vars[j]['function']['update'] :
+                # grab all the data that has this variable
+                ds = [d for d in datas if id(vars[j]) in [id(v) for v in d['vars']]]
+                
+                vars_temp[j]['function']['value'] = ut.update_fs_many(vars_temp[j], ds)
+
+        # new counts 
+        for d in datas:
+            counts = []
+            # if there is only one var then skip this dataset
+            if d.has_key('counts') : 
+                for j in range(len(d['counts'])) :
+                    counts.append(ut.update_counts(j, d))
+            
+            counts_temp.append(counts)
         
-        if var['function']['update'] :
-            f_t   = ut.update_fs(f, mus, hists)
-         
-        mus = mus_t
-        f   = f_t
-        e   = ut.log_likelihood_calc(f, mus, hists)
+        # update the current guess
+        for j in range(len(offsets_temp)):
+            offsets[j]['value'] = offsets_temp[j]['value']
+        
+        for j in range(len(vars)):
+            vars[j]['function']['value'] = vars_temp[j]['function']['value']
+        
+        for j in range(len(datas)):
+            datas[j]['counts'] = np.array(counts_temp[j])
+
+        e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)
-        print i, 'log likelihood error:', e
+        print i+1, 'log likelihood error:', e
     
     errors = np.array(errors)
     
-    # return the results
-    var['function']['values'] = f 
-    var['function']['init']   = f0 
-    var['offset']['values']   = mus
-    var['offset']['init']     = mus0 
-
-    result = Result(var, data, errors)
+    result = Result(vars, datas, errors)
     return result
 
 
 class Result():
-    def __init__(self, var, data, errors):
+    def __init__(self, vars, datas, errors):
         self.result = {}
-        self.result[data['name']] = {}
-        self.result[data['name']]['vars']    = var['name']
-        self.result[data['name']]['comment'] = data['comment']
+        for d in datas:
+            self.result[d['name']] = {}
+            self.result[d['name']]['vars']    = np.array( [var['name'] for var in d['vars']] )
+            self.result[d['name']]['comment'] = d['comment']
+            self.result[d['name']]['offset']  = d['offset']['value']
+            self.result[d['name']]['counts']  = np.array(d['counts'])
 
-        pixel_map_errors = ut.log_likelihood_calc_pixelwise(var['function']['values'], \
-                var['offset']['values'], data['histograms'])
+            pixel_map_errors = ut.log_likelihood_calc_pixelwise_many(d)
+            
+            self.result[d['name']]['pix_errors'] = pixel_map_errors
 
-        self.result[data['name']]['pix_errors'] = pixel_map_errors
-
-        self.result[var['name']]         = var
+        for var in vars :
+            self.result[var['name']] = {}
+            self.result[var['name']]['function'] = var['function']['value']
 
         self.result['error vs iter'] = errors
 
@@ -162,25 +217,24 @@ class Result():
 
         f.close()
     
-    def show_fit(self, data):
+    def show_fit(self, dataname, hists):
         errors   = self.result['error vs iter']
-        p_errors = self.result[data['name']]['pix_errors']
+        p_errors = self.result[dataname]['pix_errors']
         
-        var = self.result[data['vars'][0]['name']]
-        f_name = var['name'] + ' function'
-        f0 = var['function']['init']
-        f  = var['function']['values']
+        varnames  = self.result[dataname]['vars']
+        f_names   = [i + ' function' for i in varnames]
+        fs        = [self.result[i]['function'] for i in varnames]
             
-        mus_name = var['name'] + ' offset'
-        mus0 = var['offset']['init']
-        mus  = var['offset']['values']
-
-        N = np.sum(data['histograms'], axis=1)
-        hists1 = fm.forward_hists(f, mus, N)
-
+        mus_name = dataname + ' offset'
+        mus      = self.result[dataname]['offset']
+        
+        counts   = self.result[dataname]['counts']
+        
+        hists1 = fm.forward_hists_nvar(fs, counts, mus)
+        
         m_sort = np.argsort(p_errors)
         
-        i_range = np.arange(data['histograms'].shape[1])
+        i_range = np.arange(hists.shape[1])
         
         import pyqtgraph as pg
         import PyQt4.QtGui
@@ -192,12 +246,11 @@ class Result():
         pg.setConfigOptions(antialias=True)
         
         # show f and the mu values
-        p1 = win.addPlot(title=f_name, name = 'f')
-        p1.plot(x = i_range, y = f0, pen=(255, 0, 0))
-        p1.plot(x = i_range, y = f, pen=(0, 255, 0))
+        p1 = win.addPlot(title='functions')
+        for i in range(len(fs)):
+            p1.plot(x = i_range, y = fs[i], pen=(i, len(fs)))
         
         p2 = win.addPlot(title=mus_name, name = 'mus')
-        p2.plot(mus0[m_sort], pen=(255, 0, 0))
         p2.plot(mus[m_sort],  pen=(0, 255, 0))
         
         win.nextRow()
@@ -206,7 +259,7 @@ class Result():
         m      = 0
         title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
         hplot  = win.addPlot(title = title)
-        curve_his = hplot.plot(data['histograms'][m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        curve_his = hplot.plot(hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
         curve_fit = hplot.plot(hists1[m], pen = (0, 255, 0))
         hplot.setXLink('f')
         def replot():
@@ -214,7 +267,7 @@ class Result():
             m = m_sort[m]
             title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
             hplot.setTitle(title)
-            curve_his.setData(data['histograms'][m])
+            curve_his.setData(hists[m])
             curve_fit.setData(hists1[m])
         
         p3 = win.addPlot(title='pixel errors', name = 'p_errors')
