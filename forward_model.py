@@ -2,6 +2,73 @@ import numpy as np
 import scipy.stats
 import utils as ut
 
+def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 20., sigma_g = 0.2, mus=None, ns=None, gs=None):
+    """
+    probability dist for pixel m at adu i: f_{g_m i - mu_m} = sum_v n^m_v X^v_i
+    where m: 0 --> M-1
+    where i: 0 --> I-1
+    where v: 0 --> V-1
+    sigma(X^v)  = sigmas[v]
+    E(X^v)      = pos[v]
+    sigma(mu_m) = sigma_mu
+    sigma(g_m)  = sigma_g
+    """
+    # the "adu" range
+    i      = np.arange(0, I, 1)
+    i_bins = np.arange(0, I+1, 1)
+    
+    # the probability functions 
+    Xv = []
+    for v in range(V):
+        f = np.exp( - (i - pos[v]).astype(np.float64)**2 / (2. * sigmas[v]**2)
+        f = f / np.sum(f)
+        Xv.append(f.copy()) 
+    
+    # counts: I will make all but the first X have a maximum count rate of 0.2
+    # the probability function for the number of photons
+    Nm = scipy.stats.uniform(loc = 0, scale = 0.2)
+
+    # the probability function for the offsets or "dark values"
+    MUm = scipy.stats.norm(loc = 0.0, scale = sigma_mu)
+
+    # the probability function for the offsets or "dark values"
+    Gm  = scipy.stats.norm(loc = 1.0, scale = sigma_g)
+
+    # offsets
+    if mus is None :
+        mus = MUm.rvs(M)
+        mus = mus - np.mean(mus)
+    
+    # count fractions
+    if ns is None :
+        ns = np.zeros((M, V), dtype=np.float64)
+        for m in range(M):
+            for v in range(1, V):
+                ns[m, v] = Nm.rvs(V)
+            ns[m, 0] = 1 - np.sum(ns[m])
+    # gains
+    if gs is None :
+        gs = Gm.rvs(M)
+        gs = gs / np.sum(gs)
+
+    f = np.zeros_like(Xv[0])
+    for m in range(M):
+        # make fmi
+        f.fill(0.0)
+        for v in range(V):
+            f += ns[m, v] * Xv[v]
+        
+        # create a new random variable with the offset and gain value
+        f_gain  = ut.gain(f, gs[m])
+        f_shift = ut.roll_real(f_gain, mu) 
+        F       = scipy.stats.rv_discrete(name='F', values = (i, f_shift))
+        ff      = F.rvs(size = N)
+        hist, bins = np.histogram(ff, bins = i_bins)
+        hists.append(hist)
+    
+    hists = np.array(hists)
+    return hists, mus, gs, ns, Xv
+
 def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50, mus = None, nms = None):
     """
     """
