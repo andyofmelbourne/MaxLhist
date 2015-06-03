@@ -379,6 +379,11 @@ def jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10):
     """
     return grad
 
+def gain(f, g):
+    i     = np.arange(f.shape[0])
+    new_i = g * i
+    return np.interp(g*i, i, f)
+
 # update
 def update_fs(f0, mus, hists):
     """
@@ -536,3 +541,4 @@ def forward_fs(data, m):
     for n in range(len(data['vars'])) :
         f += data['counts'][n][m] * data['vars'][n]['function']['value']
     return f / np.sum(f)
+

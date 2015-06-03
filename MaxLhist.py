@@ -133,7 +133,7 @@ def refine(datas, iterations=1):
                 ds              = [d for d in datas if offsets[j] is d['offset']]
                 
                 offsets_temp[j]['value'] = ut.update_mus_many(offsets_temp[j], ds)
-
+        
         # new functions 
         for j in range(len(vars_temp)) :
             if vars[j]['function']['update'] :
@@ -141,7 +141,7 @@ def refine(datas, iterations=1):
                 ds = [d for d in datas if id(vars[j]) in [id(v) for v in d['vars']]]
                 
                 vars_temp[j]['function']['value'] = ut.update_fs_many(vars_temp[j], ds)
-
+        
         # new counts 
         for d in datas:
             counts = []
@@ -161,7 +161,7 @@ def refine(datas, iterations=1):
         
         for j in range(len(datas)):
             datas[j]['counts'] = np.array(counts_temp[j])
-
+        
         e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)
         print i+1, 'log likelihood error:', e

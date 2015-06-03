@@ -69,6 +69,19 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     hists = np.array(hists)
     return hists, mus, gs, ns, Xv
 
+def forward_hists_nvar(Xv, mus, gs, counts)
+    hists   = np.zeros(counts[0].shape + Xv[0].shape , dtype=Xv[0].dtype)
+    
+    for m in range(hists.shape[0]):
+        f = np.zeros_like(Xs[0])
+        for v in range(len(Xv)):
+            f += counts[m, v] * Xv[v]
+        
+        f = ut.gain(f, gs[m])
+        f = ut.roll_real(f, mus[m]) 
+        hists[m] = f
+    return hists
+
 def forward_model_twovars(I = 250, M = 10, sigma_d = 5., sigma_s = 10., ds = 10., sigma_nm = 0.1, sigma_mu = 20., size = 50, mus = None, nms = None):
     """
     """
@@ -181,14 +194,6 @@ def forward_hists_twovar(d, s, nms, mus, N):
         hists = (hists.T * N).T
     return hists
 
-def forward_hists_nvar(fs, counts, mus):
-    hists   = np.zeros(counts[0].shape + fs[0].shape , dtype=fs[0].dtype)
-    for m in range(hists.shape[0]):
-        f = np.zeros_like(fs[0])
-        for fi in range(len(fs)):
-            f += fs[fi] * counts[fi][m]
-        hists[m] = ut.roll_real(f, mus[m]) 
-    return hists
 
 if __name__ == '__main__':
     hists, M, I, mus, F = forward_model(I = 250, M = 10, sigma_f = 5., sigma_mu = 20.)
