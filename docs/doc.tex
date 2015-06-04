@@ -1,16 +1,19 @@
 \documentclass[11pt]{article}
 \usepackage{amsmath}
 \usepackage{amssymb}
+%\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+\DeclareMathOperator*{\argmax}{arg\,max}
 %Gummi|065|=)
 \title{\textbf{Finding adu distributions or finding photons}}
 \author{Andrew Morgan}
 \date{}
 \usepackage{graphicx}
+
 \begin{document}
 
 \maketitle
 
-\section{Maximum Likelihood for a single random variable}
+\section{Maximum Likelihood of detector counts}
 Thought experiment:
 
 \begin{itemize}
@@ -24,7 +27,7 @@ Thought experiment:
 The histogram is the result of measuring $\sum_m \sum_i h^m_i$ counts from a discrete random variable $x$ (adu values).
 The probability of measuring our particular sequence of values ($ x^m_n $) is given by:
 \begin{align}
-   Pr(x^m_n; f^m_i, \mu_m, g_m) &= \Pi_m^M \Pi_n^N f(x^m_n - \mu_m) = \Pi_m^M \Pi_i^I f^m(g_m i - \mu_m)^{h^m_i}
+   Pr(x^m_n; f^m_i, \mu_m, g_m) &= \Pi_m^M \Pi_n^N f_(x^m_n - \mu_m) = \Pi_m^M \Pi_i^I f^m(g_m i - \mu_m)^{h^m_i}
 \end{align}
 
 The log likelihood is:
@@ -69,7 +72,7 @@ Let us first consider the case where $V=1$, or when we only have a single random
    \frac{\partial \varepsilon(\mu, f)}{\partial f_j} &= -\frac{\partial}{\partial f_j} \sum_m^M \sum_i^I h^m_i \ln(f(g_mi - \mu_m)) \\
    &= -\frac{\partial}{\partial f_j} \sum_m^M \sum_i^I h^m_{(i+\mu_m)/g_m} \ln(f_i) \\
    &= -\sum_m^M \sum_i^I h^m_{(i+\mu_m)/g_m} \frac{\delta_{i-j}}{f_i} \\
-   &= -\frac{\sum_m^M h^m_{(i+\mu_m)/g_m}}{f_j}
+   &= -\frac{\sum_m^M h^m_{(j+\mu_m)/g_m}}{f_j}
 \end{align}
 
 In the present case this gradient vector will simply encourage ever increasing values of $f$. That is, we have to keep $f$ normalised. Now we could do this by representing $f$ in Fourier space and recalculating the gradient vector there (as we did for $\mu$). But then we also have the problem that values of $f$ for which $\sum_m^M h^m_{(i+\mu_m)/g_m}$ is zero have no effect on the error metric. Thus they are completely free to float in order to satisfy any normalisation constraint.
@@ -161,6 +164,40 @@ Looking at this, it seems to take a weighted sum of the histograms, normalises a
 
 
 \subsection{$\mu$ and $g$ The offset's (or dark values) and inverse gain}
+We could refine the offsets ($\mu$'s) and gains ($g$'s) independently. But they are highly coupled, both in our model and probably physically. Thus it would be extreamly inefficient to update them separately.
+
+The simplest brute force approach is this; Manually evaluate:
+\begin{align}
+   \argmax_{\mu_m, g_m}\left[ \sum_i^I h^m_i \ln(f^m(g_m i - \mu_m)) \right]
+\end{align}  
+Bare with me, this is not as bad as it looks. First we can use the magic of fast Fourier transforms to evaluate:
+\begin{align}
+   \varepsilon(g_m) &= \argmax_{\mu_m}\left[ \sum_i^I h^m_i \ln(f^m(g_m i - \mu_m)) \right] \\
+   &= \argmax_{i=\mu_m}\left[ h^m_i \otimes \ln(f^m(g_m i)) \right] 
+\end{align}  
+by the convolution theorem. We found that fitting a quadratic to the above equation for $i = i_{i_0-1}, i_{i_0}, i_{i_0+1}$ where $i_0$ is the solution, then fitting the maximum of that provides good results. 
+Once the optimal $g_m$ is found, then $\mu_m$ is an automatic result. Note that simple linear interpolation, followed by normalisation, can be used to evaluate $f^m(g_m i)$.  
+
+After updating each of the $\mu_m$ and $g_m$ values we should enforce $\sum_m \mu_m = 0$ and $\sum_m g_m = 1$. This is because there is a degree of freedom lurking in the shadows... For example, we could make the substitution $f(i - c) \leftrightarrow \mu + c$ and be none the wiser! We could also make the substitution $f(c g_m i) \leftrightarrow g_m / c$, how would we look then! Like fools no doubt. We would have forgotten the faces of our fathers. 
+ 
+\subsection{$N$ The counts for each random variable}
+We want to minimise:
+\begin{align}
+   \varepsilon_m &= -\sum_i^I h^m_i \ln(f^m(g_mi - \mu_m)) = -\sum_i^I h^m_{(i+\mu_m)/g_m} \ln(f^m_i) \\
+   &= - \sum_i^I h^m_{(i+\mu_m)/g_m} \ln\left(\sum_v n^m_v X^v_i\right)
+\end{align}
+with respect to the set of $n^m_v$'s. The counts for each random variable at each pixel ($N^m_v$) then follow from $N^m_v = (\sum_i h^m_i) \times n^m_v$.
+
+Once again the values for $n^m_v$ are highly coupled. If we increase the value of one random variable we must decrease the rest. Such that:
+\begin{align}
+   \sum_v n^m_v &= 1  \quad \text{for all } m 
+\end{align}
+
+So, we should represent the $n^m_v$'s in a basis for which this is always true for each pixel. This can be achieved in Fourier space, where:
+
+
+
+\subsection{old}
 We could demand that the $\mu$'s are integer, so that shifting $f(i)$ is well defined. But this leads to problems in the minimization, since most refinement algorithms like a continuous set of variables and a continuous error function. Also we would expect that the shift of the distribution (or ``dark value") at a pixel may not be an integer multiple of counts. 
 
 Another issue is that adding a constant to the mu's also corresponds to an overall shift in the probability distributions: $\mu + c \longleftrightarrow  f(i - c)$. We can remove this redundancy by demanding that the sum of the mu's is equal to 0. This can be automatically satisfied if we express the independent variables in Fourier space. Moving to Fourier space we have:
