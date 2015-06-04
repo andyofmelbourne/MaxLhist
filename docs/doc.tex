@@ -105,6 +105,19 @@ Our current model has:
 With this in mind we should now find the most simple / efficient way to minimise $\varepsilon$ with respect to each of these quantities independently. 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 \subsection{$f$ The probability (or adu) distribution}
 Let us first consider the case where $V=1$, or when we only have a single random variable at each pixel. The derivative of the error with respect to $f$ is:
 \begin{align}
@@ -189,7 +202,7 @@ Substituting into Eq. (\ref{d_twovar}):
 \end{align}
 More magic! Now we have our answer:
 \begin{align}
-   \frac{1}{M}\sum_m \left[ \sum_v n^m_v X^v_i \right] &= \frac{\sum_m n^m_u h^m_{(j+\mu_m)/g_m}}{\sum_{j}\sum_m n^m_u h^m_{(j+\mu_m)/g_m}}
+   \frac{1}{M}\sum_m \left[ \sum_v n^m_v X^v_j \right] &= \frac{\sum_m n^m_u h^m_{(j+\mu_m)/g_m}}{\sum_{j}\sum_m n^m_u h^m_{(j+\mu_m)/g_m}}
 \end{align}
 therefore:
 \begin{align}
