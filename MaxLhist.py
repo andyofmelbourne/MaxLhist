@@ -77,7 +77,7 @@ def process_input(datas):
             print "initialising", var['name'] + "'s function with the sum of the histogram data"
             var['function']['value'] = f
         else :
-            if var['function']['value'].shape[0] != datas['histograms'][0].shape[1]:
+            if var['function']['value'].shape[0] != datas[0]['histograms'].shape[1]:
                 print "Error:", var['name']+"'s initial guess for the function does not have the right shape:", var['function']['value'].shape[0], ' hists.shape[1]=', f.shape[0]
                 sys.exit()
     
@@ -103,7 +103,8 @@ def process_input(datas):
             counts = np.sum(data['histograms'], axis=-1).astype(np.float64) / float(nvars) 
             data['counts'] = [counts.copy() for v in data['vars']]
         else :
-            for count in data['counts']:
+            for i in range(data['counts']['value'].shape[0]):
+                count = data['counts']['value'][i]
                 if count.shape[0] != data['histograms'].shape[0] :
                     print "Error:", data['name']+"'s initial guess for the counts does not have the right shape:", count.shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
                     sys.exit()
@@ -147,20 +148,24 @@ def refine(datas, iterations=1):
             counts = []
             # if there is only one var then skip this dataset
             if d.has_key('counts') : 
-                for j in range(len(d['counts'])) :
-                    counts.append(ut.update_counts(j, d))
+                if d['counts']['update']: 
+                    counts.append(ut.update_counts(d))
             
             counts_temp.append(counts)
         
         # update the current guess
         for j in range(len(offsets_temp)):
-            offsets[j]['value'] = offsets_temp[j]['value']
+            if offsets[j]['update'] :
+                offsets[j]['value'] = offsets_temp[j]['value']
         
         for j in range(len(vars)):
-            vars[j]['function']['value'] = vars_temp[j]['function']['value']
+            if vars[j]['function']['update'] :
+                vars[j]['function']['value'] = vars_temp[j]['function']['value']
         
         for j in range(len(datas)):
-            datas[j]['counts'] = np.array(counts_temp[j])
+            if d.has_key('counts') : 
+                if d['counts']['update']: 
+                    datas[j]['counts'] = np.array(counts_temp[j])
         
         e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)
@@ -180,7 +185,8 @@ class Result():
             self.result[d['name']]['vars']    = np.array( [var['name'] for var in d['vars']] )
             self.result[d['name']]['comment'] = d['comment']
             self.result[d['name']]['offset']  = d['offset']['value']
-            self.result[d['name']]['counts']  = np.array(d['counts'])
+            self.result[d['name']]['counts']  = d['counts']['value']
+            self.result[d['name']]['gain']    = d['gain']['value']
 
             pixel_map_errors = ut.log_likelihood_calc_pixelwise_many(d)
             
@@ -228,9 +234,12 @@ class Result():
         mus_name = dataname + ' offset'
         mus      = self.result[dataname]['offset']
         
+        gs_name = dataname + ' gain'
+        gs      = self.result[dataname]['gain']
+
         counts   = self.result[dataname]['counts']
         
-        hists1 = fm.forward_hists_nvar(fs, counts, mus)
+        hists1 = fm.forward_hists_nvar(fs, mus, gs, counts)
         
         m_sort = np.argsort(p_errors)
         
@@ -265,7 +274,7 @@ class Result():
         def replot():
             m = hline.value()
             m = m_sort[m]
-            title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
+            title = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m])
             hplot.setTitle(title)
             curve_his.setData(hists[m])
             curve_fit.setData(hists1[m])

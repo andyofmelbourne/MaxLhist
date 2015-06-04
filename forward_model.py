@@ -20,7 +20,7 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     # the probability functions 
     Xv = []
     for v in range(V):
-        f = np.exp( - (i - pos[v]).astype(np.float64)**2 / (2. * sigmas[v]**2)
+        f = np.exp( - (i - pos[v]).astype(np.float64)**2 / (2. * sigmas[v]**2) )
         f = f / np.sum(f)
         Xv.append(f.copy()) 
     
@@ -31,7 +31,7 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     # the probability function for the offsets or "dark values"
     MUm = scipy.stats.norm(loc = 0.0, scale = sigma_mu)
 
-    # the probability function for the offsets or "dark values"
+    # the probability function for the pixel gains 
     Gm  = scipy.stats.norm(loc = 1.0, scale = sigma_g)
 
     # offsets
@@ -41,26 +41,27 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     
     # count fractions
     if ns is None :
-        ns = np.zeros((M, V), dtype=np.float64)
+        ns = np.zeros((V, M), dtype=np.float64)
         for m in range(M):
             for v in range(1, V):
-                ns[m, v] = Nm.rvs(V)
-            ns[m, 0] = 1 - np.sum(ns[m])
+                ns[v, m] = Nm.rvs(1)
+            ns[0, m] = 1 - np.sum(ns[:, m])
     # gains
     if gs is None :
         gs = Gm.rvs(M)
-        gs = gs / np.sum(gs)
+        gs = gs / np.mean(gs)
 
     f = np.zeros_like(Xv[0])
+    hists = []
     for m in range(M):
         # make fmi
         f.fill(0.0)
         for v in range(V):
-            f += ns[m, v] * Xv[v]
+            f += ns[v, m] * Xv[v]
         
         # create a new random variable with the offset and gain value
         f_gain  = ut.gain(f, gs[m])
-        f_shift = ut.roll_real(f_gain, mu) 
+        f_shift = ut.roll_real(f_gain, mus[m]) 
         F       = scipy.stats.rv_discrete(name='F', values = (i, f_shift))
         ff      = F.rvs(size = N)
         hist, bins = np.histogram(ff, bins = i_bins)
@@ -69,13 +70,13 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     hists = np.array(hists)
     return hists, mus, gs, ns, Xv
 
-def forward_hists_nvar(Xv, mus, gs, counts)
+def forward_hists_nvar(Xv, mus, gs, counts):
     hists   = np.zeros(counts[0].shape + Xv[0].shape , dtype=Xv[0].dtype)
     
     for m in range(hists.shape[0]):
-        f = np.zeros_like(Xs[0])
+        f = np.zeros_like(Xv[0])
         for v in range(len(Xv)):
-            f += counts[m, v] * Xv[v]
+            f += counts[v, m] * Xv[v]
         
         f = ut.gain(f, gs[m])
         f = ut.roll_real(f, mus[m]) 

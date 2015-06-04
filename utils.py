@@ -217,6 +217,7 @@ def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
 
 def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
     mus   = d['offset']['value']
+    gs    = d['gain']['value']
     hists = d['histograms']
     
     from scipy.special import gammaln
@@ -228,6 +229,7 @@ def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
         Is = np.where(hists[m] > 0)
         
         # evaluate the shifted probability function
+        fs = gain(f, gs[m])
         fs = roll_real(f, mus[m])[Is] 
         fs[np.where(fs < 0)] = 0.0
 
@@ -381,8 +383,14 @@ def jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10):
 
 def gain(f, g):
     i     = np.arange(f.shape[0])
-    new_i = g * i
-    return np.interp(g*i, i, f)
+    fout  = np.interp(g*i, i, f)
+    # preserve normalisation
+    f_sum = np.sum(f)
+    if np.abs(f_sum) < 1.0e-10 :
+        fout = fout - np.sum(fout)
+    else :
+        fout  = fout * f_sum / np.sum(fout)
+    return fout
 
 # update
 def update_fs(f0, mus, hists):
@@ -405,25 +413,30 @@ def update_fs(f0, mus, hists):
 def update_fs_many(var, ds):
     """
     """
+    print 'updating ', var['name']
     f = var['function']['value'].copy()
     
     h = np.zeros( f.shape, dtype=f.dtype)
     for d in ds:
         hist   = d['histograms']
         mus    = d['offset']['value']
-        print var['name'], [v['name'] for v in d['vars']]
         vi     = np.where([var is vt for vt in d['vars']])[0][0]
         for m in range(len(mus)) :
-            ns = d['counts'][vi][m] / np.sum(hist[m].astype(np.float64))
-            h += ns * roll_real(hist[m].astype(np.float64), - mus[m])
+            h_m = hist[m].astype(np.float64)
+            
+            # un-shift and un-gain
+            h_m = roll_real(h_m, - mus[m])
+            h_m = gain(h_m, 1./d['gain']['value'][m])
+            
+            ns  = d['counts']['value'][vi][m] / np.sum(h_m)
+            h  += ns * h_m
         
-    # generate a mask
+    # apply a mask to aviod unconstrained values
     mask = (h >= 1.0)
-    f = mask * h
-    f = f / np.sum(f)
+    f    = mask * h
+    f    = f / np.sum(f)
     
-    dout = float(hist.shape[0] * len(ds)) * f.copy()
-    nd   = 0.0
+    X = float(hist.shape[0] * len(ds)) * f
     # subtract the other stuff
     for d in ds:
         hist   = d['histograms']
@@ -433,13 +446,17 @@ def update_fs_many(var, ds):
                 vi = np.where([v is vt for vt in d['vars']])[0][0]
                 n  = 0.0
                 for m in range(len(mus)) :
-                    n  += d['counts'][vi][m] / np.sum(hist[m].astype(np.float64))
+                    n  += d['counts']['value'][vi][m] / np.sum(hist[m].astype(np.float64))
                 
-                dout -= n * v['function']['value']
+                X -= n * v['function']['value']
     
-    dout[np.where(dout < 0)] = 0.0
-    dout = dout / np.sum(dout)
-    return dout
+    Is = np.where(X < 0)
+    if Is[0].shape[0] > 0 :
+        print 'warning: ', var['name'] + "'s function had zeros in the update to the sum of ", np.sum(X[Is]) ,". Masking..."
+        X[Is] = 0.0
+    X = X / np.sum(X)
+    return X
+
 
 def update_mus(f, mus0, hists, padd_factor = 1, normalise = True, quadfit = True):
     mus = mus0.copy()
@@ -539,6 +556,6 @@ def update_mus_many(offset, ds, normalise = True, quadfit = True):
 def forward_fs(data, m):
     f = np.zeros( (data['histograms'].shape[1]), dtype=np.float64)
     for n in range(len(data['vars'])) :
-        f += data['counts'][n][m] * data['vars'][n]['function']['value']
+        f += data['counts']['value'][n][m] * data['vars'][n]['function']['value']
     return f / np.sum(f)
 
