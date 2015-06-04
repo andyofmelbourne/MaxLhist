@@ -101,7 +101,11 @@ def process_input(datas):
             print 'initialising the counts for', data['name'] + "'s variables with the number of counts / number of vars."
             nvars  = len(data['vars'])
             counts = np.sum(data['histograms'], axis=-1).astype(np.float64) / float(nvars) 
-            data['counts'] = [counts.copy() for v in data['vars']]
+            if nvars == 1 :
+                update = False 
+            else :
+                update = True
+            data['counts'] = {'update' : update, 'value' : np.array([counts.copy() for v in data['vars']])}
         else :
             for i in range(data['counts']['value'].shape[0]):
                 count = data['counts']['value'][i]
@@ -137,11 +141,10 @@ def refine(datas, iterations=1):
         
         # new functions 
         for j in range(len(vars_temp)) :
-            if vars[j]['function']['update'] :
-                # grab all the data that has this variable
-                ds = [d for d in datas if id(vars[j]) in [id(v) for v in d['vars']]]
-                
-                vars_temp[j]['function']['value'] = ut.update_fs_many(vars_temp[j], ds)
+            Xv = ut.update_fs_new(vars, datas)
+            
+            for v in range(len(vars)):
+                vars_temp[v]['function']['value'] = Xv[v]
         
         # new counts 
         for d in datas:
@@ -240,7 +243,7 @@ class Result():
         counts   = self.result[dataname]['counts']
         
         hists1 = fm.forward_hists_nvar(fs, mus, gs, counts)
-        
+         
         m_sort = np.argsort(p_errors)
         
         i_range = np.arange(hists.shape[1])

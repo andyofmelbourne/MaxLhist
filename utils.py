@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+from scipy.ndimage import gaussian_filter1d
 
 def roll(a, x):
     """
@@ -455,6 +456,74 @@ def update_fs_many(var, ds):
         print 'warning: ', var['name'] + "'s function had zeros in the update to the sum of ", np.sum(X[Is]) ,". Masking..."
         X[Is] = 0.0
     X = X / np.sum(X)
+    return X
+
+def ungain_unshift_hist(hists, mus, gs):
+    hist_adj = np.zeros_like(hists, dtype=np.float64)
+    for m in range(hists.shape[0]):
+        hist_adj[m] = roll_real(hists[m].astype(np.float64), -mus[m])
+        hist_adj[m] = gain(hist_adj[m], 1. / gs[m]) #/ total_counts
+    return hist_adj
+
+def update_fs_new(vars, datas, normalise = True, smooth = 0):
+    # join the histograms and counts into a big histogram thing
+    M = datas[0]['histograms'].shape[0]
+    D = len(datas)
+    V = len(vars)
+    I = datas[0]['histograms'].shape[1]
+    counts = np.zeros((V, M * D), dtype=np.float64)
+    X      = np.zeros((V, I), dtype=np.float64)
+    for d in range(0, D):
+        if d == 0 :
+            hist   = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'])
+        else : 
+            hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'])))
+        
+        # fill the counts for datas vars
+        for v in range(V):
+            X[v, :] = vars[v]['function']['value']
+            i = np.where([vars[v] is vt for vt in datas[d]['vars']])
+            if i[0].shape[0] > 0 :
+                i = i[0][0]
+                counts[i, d * M : (d+1) * M] = datas[d]['counts']['value'][v]
+
+    total_counts_v = np.sum(counts, axis=-1)
+    total_counts   = np.sum(total_counts_v)
+    ns             = counts / np.sum(hist, axis=-1)
+    
+    update_vs  = np.where([v['function']['update'] for v in vars])[0]
+    nupdate_vs = np.where([not v['function']['update'] for v in vars])[0]
+    
+    print hist.shape, ns.shape, X.shape
+    for j in range(hist.shape[-1]):
+        hj     = hist[:, j] 
+        ms     = np.where(hj*total_counts>1)
+        Xj     = X[nupdate_vs, j]
+        if np.sum(hj[ms]*total_counts) > 0 :
+            def fun_graderror(Xvs):
+                fj    = np.sum(ns[update_vs, :].T * Xvs, axis=-1)
+                fj   += np.sum(ns[nupdate_vs, :].T * Xj, axis=-1)
+                error = 0.0
+                for v in range(len(Xvs)):
+                    error += (total_counts_v[v] - np.sum(ns[v][ms] * hj[ms] / (fj[ms]+1.0e-10)))**2
+                return error
+            
+            Xvs_0 = X[update_vs, j]
+            res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=[(0, 1.0),(0, 1.0)]\
+                    ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
+            res['pixel'] = j
+            print 'optimising adu value:', j, res.fun
+            X[update_vs, j] = res.x
+        else :
+            X[update_vs, j] = res.x
+
+    if smooth != 0 :
+        for v in range(V):
+            X[v, :] = gaussian_filter1d(X[v], smooth)
+
+    if normalise :
+        for v in range(V):
+            X[v, :] = X[v, :] / np.sum(X[v, :])
     return X
 
 

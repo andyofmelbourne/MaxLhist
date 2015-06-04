@@ -22,9 +22,10 @@ f = np.exp( - (i - 150.).astype(np.float64)**2 / (2. * 20.) )
 f = f / np.sum(f)
 d = f.copy()
 
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=5000, N=5000, V=2, sigmas = [5., 7.], pos = [100, 120], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
-
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigmas = [5., 7.], pos = [100, 120], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
+
+hists2, mus, gs, ns2, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, sigmas = [5.], pos = [100], sigma_mu = 10., sigma_g = 0.1, mus=mus, ns=None, gs=gs)
 
 # Random variables
 #-----------------
@@ -48,6 +49,15 @@ dPhoton = {
 
 # data
 #-----
+data2 = {
+        'name'       : 'dark run',
+        'histograms' : hists2,
+        'vars'       : [background], 
+        'offset'     : {'update': False, 'value' : mus},
+        'gain'       : {'update': False, 'value' : gs},
+        'comment'    : 'testing the X update'
+        }
+
 data = {
         'name'       : 'run',
         'histograms' : hists,
@@ -60,7 +70,8 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data], iterations=5)
+result = MaxLhist.refine([data2, data], iterations=3)
+result.show_fit('run', hists)
 
 """
 total_counts_v = np.sum(counts, axis=-1)
@@ -149,7 +160,6 @@ for j in range(hists.shape[-1]):
 
 #result.dump_to_h5(fnam = 'example/darkcal.h5')
 
-result.show_fit('run', hists)
 
 
 """
