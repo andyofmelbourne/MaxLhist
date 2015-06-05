@@ -65,6 +65,28 @@ def process_input(datas):
             print 'Error: every dataset must have an offset element ', data['name']
             sys.exit()
 
+    # get the gain
+    gains = []
+    for data in datas:
+        if data.has_key('gain'):
+            gain = data['gain']
+            # check if we already have this in the list
+            add = True
+            for o in gains :
+                if o is gain :
+                    print data['name'] +"'s gain is linked to a previous one. Will update together..."
+                    add = False
+            # if not then add it
+            if add :
+                gains.append(gain)
+            
+            if not data['gain'].has_key('update') :
+                print 'Error: the gain of', data['name'], 'must have an update variable.'
+                sys.exit()
+        else :
+            print 'Error: every dataset must have an gain element ', data['name']
+            sys.exit()
+
     # inital guess
     # Loop over the value elements of vars and 
     # offsets to initialise the random variables
@@ -95,6 +117,14 @@ def process_input(datas):
                 print "Error:", data['name']+"'s initial guess for the offsets does not have the right shape:", data['offset']['value'].shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
                 sys.exit()
 
+    for gain in gains :
+        if gain['value'] is None :
+            gain['value'] = np.ones((datas[0]['histograms'].shape[0]), dtype=np.float64)
+        else :
+            if gain['value'].shape[0] != datas[0]['histograms'].shape[0] :
+                print "Error:", data['name']+"'s initial guess for the gain does not have the right shape:", data['gain']['value'].shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
+                sys.exit()
+
     # get the counts
     for data in datas:
         if not data.has_key('counts'):
@@ -113,16 +143,17 @@ def process_input(datas):
                     print "Error:", data['name']+"'s initial guess for the counts does not have the right shape:", count.shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
                     sys.exit()
     
-    return offsets, vars, datas
+    return offsets, gains, vars, datas
 
 
 def refine(datas, iterations=1):
-    offsets, vars, datas = process_input(datas)
+    offsets, gains, vars, datas = process_input(datas)
     
     # update the guess
     #-----------------
     errors = []
     offsets_temp   = list(offsets)
+    gains_temp     = list(gains)
     vars_temp      = list(vars)
     counts_temp    = []
     
@@ -131,13 +162,22 @@ def refine(datas, iterations=1):
     print 0, 'log likelihood error:', e
     
     for i in range(iterations):
-        # new offsets 
+        # new gain / offsets 
+        for j in range(len(gains_temp)):
+            if gains[j]['update'] :
+                # grab all the data that has this gain
+                ds              = [d for d in datas if gains[j] is d['gain']]
+                print 'updating the offset and gain of: ', [d['name'] for d in ds]
+                offsets_temp[j]['value'], gains_temp[j]['value'] = ut.update_mus_gain(ds) 
+                
+        # now check if there are any offsets without gain updates
         for j in range(len(offsets_temp)):
             if offsets[j]['update'] :
                 # grab all the data that has this offset
-                ds              = [d for d in datas if offsets[j] is d['offset']]
-                
-                offsets_temp[j]['value'] = ut.update_mus_many(offsets_temp[j], ds)
+                ds              = [d for d in datas if (offsets[j] is d['offset']) and (d['gain']['update']==False)]
+                if len(ds) > 0 :
+                    print 'updating the offset: ', [d['name'] for d in ds]
+                    offsets_temp[j]['value'] = ut.update_mus_not_gain(ds)
         
         # new functions 
         for j in range(len(vars_temp)) :
@@ -160,6 +200,10 @@ def refine(datas, iterations=1):
         for j in range(len(offsets_temp)):
             if offsets[j]['update'] :
                 offsets[j]['value'] = offsets_temp[j]['value']
+        
+        for j in range(len(gains_temp)):
+            if gains[j]['update'] :
+                gains[j]['value'] = gains_temp[j]['value']
         
         for j in range(len(vars)):
             if vars[j]['function']['update'] :

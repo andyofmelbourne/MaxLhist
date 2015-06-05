@@ -233,13 +233,28 @@ The simplest brute force approach is this; Manually evaluate:
 \end{align}  
 Bare with me, this is not as bad as it looks. First we can use the magic of fast Fourier transforms to evaluate:
 \begin{align}
-   \varepsilon(g_m) &= \argmax_{\mu_m}\left[ \sum_i^I h^m_i \ln(f^m(g_m i - \mu_m)) \right] \\
-   &= \argmax_{i=\mu_m}\left[ h^m_i \otimes \ln(f^m(g_m i)) \right] 
+   \varepsilon(g_m) &= -\max\left[ \sum_i^I h^m_i \ln(f^m(g_m i - \mu_m)) \right] \\
+   &= -\max\left[ h^m_i \otimes \ln(f^m(g_m i)) \right] 
 \end{align}  
 by the convolution theorem. We found that fitting a quadratic to the above equation for $i = i_{i_0-1}, i_{i_0}, i_{i_0+1}$ where $i_0$ is the solution, then fitting the maximum of that provides good results. 
 Once the optimal $g_m$ is found, then $\mu_m$ is an automatic result. Note that simple linear interpolation, followed by normalisation, can be used to evaluate $f^m(g_m i)$.  
 
-After updating each of the $\mu_m$ and $g_m$ values we should enforce $\sum_m \mu_m = 0$ and $\sum_m g_m = 1$. This is because there is a degree of freedom lurking in the shadows... For example, we could make the substitution $f(i - c) \leftrightarrow \mu + c$ and be none the wiser! We could also make the substitution $f(c g_m i) \leftrightarrow g_m / c$, how would we look then! Like fools no doubt. We would have forgotten the faces of our fathers. 
+After updating each of the $\mu_m$ and $g_m$ values we should enforce $\sum_m \mu_m = 0$ and $\frac{1}{M}\sum_m g_m = 1$. This is because there is a degree of freedom lurking in the shadows... For example, we could make the substitution $f(i - c) \leftrightarrow \mu + c$ and be none the wiser! We could also make the substitution $f(c g_m i) \leftrightarrow g_m / c$, how would we look then! Like fools no doubt. We would have forgotten the faces of our fathers. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  
 \subsection{$N$ The counts for each random variable}
 We want to minimise:

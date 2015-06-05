@@ -25,20 +25,20 @@ d = f.copy()
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigmas = [5., 7.], pos = [100, 120], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
 
-hists2, mus, gs, ns2, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, sigmas = [5.], pos = [100], sigma_mu = 10., sigma_g = 0.1, mus=mus, ns=None, gs=gs)
+hists2, mus, gs, ns2, Xv2 = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, sigmas = [5.], pos = [100], sigma_mu = 10., sigma_g = 0.1, mus=mus, ns=None, gs=gs)
 
 # Random variables
 #-----------------
 background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : b},
+        'function'  : {'update': False, 'value' : Xv[0]},
         }
 
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : s},
+        'function'  : {'update': False, 'value' : Xv[1]},
         }
 
 dPhoton = {
@@ -53,8 +53,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': False, 'value' : mus},
-        'gain'       : {'update': False, 'value' : gs},
+        'offset'     : {'update': True , 'value' : None},
+        'gain'       : {'update': False, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
@@ -62,15 +62,15 @@ data = {
         'name'       : 'run',
         'histograms' : hists,
         'vars'       : [background, sPhoton], 
-        'offset'     : {'update': False, 'value' : mus},
-        'gain'       : {'update': False, 'value' : gs},
+        'offset'     : data2['offset'],
+        'gain'       : data2['gain'],
         'counts'     : {'update': False, 'value' : counts},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=3)
+result = MaxLhist.refine([data2, data], iterations=1)
 result.show_fit('run', hists)
 
 """

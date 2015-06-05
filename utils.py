@@ -181,16 +181,18 @@ def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
     for d in datas:
         hists = d['histograms']
         mus   = d['offset']['value']
+        gs    = d['gain']['value'] 
         for m in range(len(hists)):
             f  = forward_fs(d, m)
             Is = np.where(hists[m] > 0)
             
-            # evaluate the shifted probability function
-            fs = roll_real(f, mus[m])[Is] 
-            fs[np.where(fs < 0)] = 0.0
+            # evaluate the gained then shifted probability function
+            f = gain(f, gs[m]) 
+            f = roll_real(f, mus[m])[Is]
+            f[np.where(f < 0)] = 0.0
 
             # sum the log liklihood errors for this pixel
-            e  = hists[m, Is] * np.log(prob_tol + fs)
+            e  = hists[m, Is] * np.log(prob_tol + f)
             error += np.sum(e)
     return -error
 
@@ -466,6 +468,8 @@ def ungain_unshift_hist(hists, mus, gs):
     return hist_adj
 
 def update_fs_new(vars, datas, normalise = True, smooth = 0):
+
+    
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)
@@ -473,6 +477,14 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
     I = datas[0]['histograms'].shape[1]
     counts = np.zeros((V, M * D), dtype=np.float64)
     X      = np.zeros((V, I), dtype=np.float64)
+
+    update_vs  = np.where([v['function']['update'] for v in vars])[0]
+    nupdate_vs = np.where([not v['function']['update'] for v in vars])[0]
+    if len(update_vs) == 0 :
+        for v in range(V):
+            X[v, :] = vars[v]['function']['value']
+        return X
+    
     for d in range(0, D):
         if d == 0 :
             hist   = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'])
@@ -490,9 +502,6 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
     total_counts_v = np.sum(counts, axis=-1)
     total_counts   = np.sum(total_counts_v)
     ns             = counts / np.sum(hist, axis=-1)
-    
-    update_vs  = np.where([v['function']['update'] for v in vars])[0]
-    nupdate_vs = np.where([not v['function']['update'] for v in vars])[0]
     
     print hist.shape, ns.shape, X.shape
     for j in range(hist.shape[-1]):
@@ -627,4 +636,128 @@ def forward_fs(data, m):
     for n in range(len(data['vars'])) :
         f += data['counts']['value'][n][m] * data['vars'][n]['function']['value']
     return f / np.sum(f)
+
+
+def update_mus_gain(ds, normalise = True, quadfit = True):
+    M   = ds[0]['histograms'].shape[0]
+    mus = np.zeros_like(ds[0]['offset']['value'])
+    gs  = np.zeros_like(ds[0]['gain']['value'])
+    for m in range(M):
+        fms    = [forward_fs(d, m) for d in ds]
+        hms    = [d['histograms'][m] for d in ds]
+        mu, g  = update_mus_gain_pix(hms, fms, quadfit = quadfit)
+        mus[m] = mu
+        gs[m]  = g
+    
+    if normalise :
+        mus = mus - np.sum(mus)/float(len(mus))
+        gs  = gs / np.mean(gs)
+    
+    return mus, gs
+
+def update_mus_not_gain(ds, normalise = True, quadfit = True):
+    M   = ds[0]['histograms'].shape[0]
+    mus = np.zeros_like(ds[0]['offset']['value'])
+    gs  = ds[0]['gain']['value']
+    for m in range(M):
+        fms    = [forward_fs(d, m) for d in ds]
+        hms    = [d['histograms'][m] for d in ds]
+        mu     = update_mus_not_gain_pix(hms, fms, gs[m], quadfit = quadfit)
+        mus[m] = mu
+    
+    if normalise :
+        mus = mus - np.sum(mus)/float(len(mus))
+    
+    return mus
+
+def update_mus_not_gain_pix(hms, fms, g, quadfit = True):
+    hms_hat = np.array([np.fft.rfft(hm.astype(np.float64)) for hm in hms])
+    fftfreq = fms[0].shape[0] * np.fft.fftfreq(fms[0].shape[0])
+
+    fms_hat = np.array([np.fft.rfft(np.log(gain(f, g) + 1.0e-10)) for f in fms])
+    fms_hat = np.conj(fms_hat)
+    
+    cor = np.fft.irfft( np.sum( fms_hat * hms_hat, axis=0) )
+    
+    mu_0     = np.argmax(cor)
+    cor_max0 = cor[mu_0]
+    
+    if quadfit :
+        # map to shift coord
+        mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[0]
+        mus_t = fftfreq[mus_0]
+        vs    = cor[mus_0]
+        p     = np.polyfit(mus_t, vs, 2)
+        # evaluate the new arg maximum 
+        mu      = - p[1] / (2. * p[0])
+        if (mu > mus_t[0]) and (mu < mus_t[-1]) and (p[0] < 0) :
+            pass
+        else :
+            print 'quadratic fit failed', mu_0, mu, mus_t, p
+            mu      = fftfreq[mu_0]
+    else :
+        mu      = fftfreq[mu_0]
+    return mu
+    
+
+def update_mus_gain_pix(hms, fms, quadfit = True):
+    """    
+    calculate the minimum of e(g) = - max [sum_data h .conv. ln(f(g*i))]
+    then return g and i
+    """    
+    hms_hat = np.array([np.fft.rfft(hm.astype(np.float64)) for hm in hms])
+    fftfreq = fms[0].shape[0] * np.fft.fftfreq(fms[0].shape[0])
+    
+    def error_quadfit_fun(g, return_mu = False):
+        fms_hat = np.array([np.fft.rfft(np.log(gain(f, g) + 1.0e-10)) for f in fms])
+        fms_hat = np.conj(fms_hat)
+        
+        cor = np.fft.irfft( np.sum( fms_hat * hms_hat, axis=0) )
+        
+        mu_0     = np.argmax(cor)
+        cor_max0 = cor[mu_0]
+        
+        # map to shift coord
+        mus_0 = np.array([mu_0-1, mu_0, mu_0 + 1]) % cor.shape[0]
+        mus_t = fftfreq[mus_0]
+        vs    = cor[mus_0]
+        p     = np.polyfit(mus_t, vs, 2)
+        # evaluate the new arg maximum 
+        mu      = - p[1] / (2. * p[0])
+        if (mu > mus_t[0]) and (mu < mus_t[-1]) and (p[0] < 0) :
+            cor_max = p[0] * mu**2 + p[1] * mu + p[2]
+        else :
+            print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape
+            mu      = fftfreq[mu_0]
+            cor_max = cor_max0
+        
+        # keep mu, which we get for free kind of
+        if return_mu :
+            return -cor_max, mu
+        else :
+            return -cor_max
+    
+    def error_fun(g, return_mu = False):
+        fms_hat = np.array([np.fft.rfft(np.log(gain(f, g) + 1.0e-10)) for f in fms])
+        fms_hat = np.conj(fms_hat)
+        
+        cor = np.fft.irfft( np.sum( fms_hat * hms_hat, axis=0) )
+        
+        # keep mu, which we get for free kind of
+        if return_mu :
+            mu = np.argmax(cor)
+            mu = fftfreq[mu]
+            return -np.max(cor), mu
+        else :
+            return -np.max(cor)
+        
+    if quadfit :
+        errorf = error_quadfit_fun
+    else :
+        errorf = error_fun
+    
+    res   = scipy.optimize.minimize_scalar(errorf, method='bounded', bounds=(0.5, 1.5))
+    g     = res.x
+    e, mu = errorf(g, True)
+    return mu, g
 
