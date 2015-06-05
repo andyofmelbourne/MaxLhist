@@ -180,11 +180,10 @@ def refine(datas, iterations=1):
                     offsets_temp[j]['value'] = ut.update_mus_not_gain(ds)
         
         # new functions 
-        for j in range(len(vars_temp)) :
-            Xv = ut.update_fs_new(vars, datas)
+        Xv = ut.update_fs_new(vars, datas)
             
-            for v in range(len(vars)):
-                vars_temp[v]['function']['value'] = Xv[v]
+        for v in range(len(vars)):
+            vars_temp[v]['function']['value'] = Xv[v]
         
         # new counts 
         for d in datas:

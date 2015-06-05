@@ -32,13 +32,13 @@ hists2, mus, gs, ns2, Xv2 = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, s
 background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
-        'function'  : {'update': False, 'value' : Xv[0]},
+        'function'  : {'update': True, 'value' : b},
         }
 
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': False, 'value' : Xv[1]},
+        'function'  : {'update': True, 'value' : s},
         }
 
 dPhoton = {
@@ -53,8 +53,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': True , 'value' : None},
-        'gain'       : {'update': False, 'value' : None},
+        'offset'     : {'update': True, 'value' : None},
+        'gain'       : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
@@ -70,7 +70,7 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=1)
+result = MaxLhist.refine([data2, data], iterations=5)
 result.show_fit('run', hists)
 
 """

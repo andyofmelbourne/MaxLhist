@@ -503,7 +503,6 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
     total_counts   = np.sum(total_counts_v)
     ns             = counts / np.sum(hist, axis=-1)
     
-    print hist.shape, ns.shape, X.shape
     for j in range(hist.shape[-1]):
         hj     = hist[:, j] 
         ms     = np.where(hj*total_counts>1)
@@ -521,7 +520,7 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
             res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=[(0, 1.0),(0, 1.0)]\
                     ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
             res['pixel'] = j
-            print 'optimising adu value:', j, res.fun
+            #print 'optimising adu value:', j, res.fun
             X[update_vs, j] = res.x
         else :
             X[update_vs, j] = res.x
