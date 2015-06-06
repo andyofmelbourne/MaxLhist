@@ -468,8 +468,6 @@ def ungain_unshift_hist(hists, mus, gs):
     return hist_adj
 
 def update_fs_new(vars, datas, normalise = True, smooth = 0):
-
-    
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)
@@ -477,6 +475,10 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
     I = datas[0]['histograms'].shape[1]
     counts = np.zeros((V, M * D), dtype=np.float64)
     X      = np.zeros((V, I), dtype=np.float64)
+
+    bounds = []
+    for v in range(V):
+        bounds.append( (0.0, 1.0) )
 
     update_vs  = np.where([v['function']['update'] for v in vars])[0]
     nupdate_vs = np.where([not v['function']['update'] for v in vars])[0]
@@ -517,7 +519,7 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
                 return error
             
             Xvs_0 = X[update_vs, j]
-            res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=[(0, 1.0),(0, 1.0)]\
+            res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
                     ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
             res['pixel'] = j
             #print 'optimising adu value:', j, res.fun
@@ -760,3 +762,96 @@ def update_mus_gain_pix(hms, fms, quadfit = True):
     e, mu = errorf(g, True)
     return mu, g
 
+
+def update_counts(d):
+    """
+    """
+    M   = d['histograms'].shape[0]
+    mus = np.zeros_like(d['offset']['value'])
+    gs  = d['gain']['value']
+    Nv_out = np.zeros_like(d['counts']['value'])
+
+    if Nv_out.shape[0] % 2 == 0 : # even
+        update_counts_pix = update_counts_pix_even_V
+    else :
+        update_counts_pix = update_counts_pix_odd_V
+    
+    for m in range(M):
+        Xv = [var['function']['value'] for var in d['vars']]
+        h  = d['histograms'][m]
+        Nv = d['counts']['value'][:, m]
+        
+        Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m])
+    
+    return mus
+    
+def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
+    hgm = roll_real(h, -mu)
+    hgm = gain(hgm, 1 / g)
+    
+    # we don't need the zeros...
+    Is = np.where(hgm >= 1)
+    hgm = hgm[Is]
+    
+    Yv  = np.fft.irfftn(np.array(Xv)[:, Is], axes=(0, ))
+    V   = Yv.shape[0]
+    def fi(Nh):
+        Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
+        return Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv, axis=0).real
+    
+    def fun(Nh):
+        error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
+        return error
+    
+    def fprime(Nh):
+        out = - 2 * np.sum( hgm * Yv / (fi(Nh) + 1.0e-10) )
+        return np.concatenate( (out.real, out.imag) )
+
+    # initial guess, need to fft then map to real
+    Nh_r   = np.fft.rfft( Nv )[1 :]
+    Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
+    
+    res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
+    print res.x
+    
+    # solution, need to map to complex then ifft
+    Nh     = res.x[: (V-1) / 2] + 1J * res.x[(V-1) / 2 :]
+    Nh     = np.concatenate( ( [1], Nh ) )
+    Nv_out = np.fft.irfft( Nh )
+    return Nv_out
+
+
+def update_counts_pix_even_V(h, Xv, Nv, g, mu):
+    hgm = roll_real(h, -mu)
+    hgm = gain(hgm, 1 / g)
+    
+    # we don't need the zeros...
+    Is = np.where(hgm >= 1)
+    hgm = hgm[Is]
+    
+    Yv  = np.fft.irfftn(np.array(Xv)[:, Is], axes=(0, ))
+    V   = Yv.shape[0]
+    def fi(Nh):
+        Nh_c  = Nh[: V / 2 - 1] + 1J * Nh[V / 2 :]
+        return Yv[0].real + np.sum( Nh_c * Yv, axis=0).real + (Yv[-1] * Nh[V/2 - 1]).real
+    
+    def fun(Nh):
+        error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
+        return error
+    
+    def fprime(Nh):
+        out = - 2 * np.sum( hgm * Yv / (fi(Nh) + 1.0e-10) )
+        return np.concatenate( (out.real, out.imag) )
+
+    # initial guess, need to fft then map to real
+    Nh_r   = np.fft.rfft( Nv )[1 :]
+    Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag[:-1]) )
+    
+    res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
+    print res.x
+    
+    # solution, need to map to complex then ifft
+    Nh     = res.x[: V / 2 - 1] + 1J * res.x[V / 2 :]
+    Nh     = np.concatenate( ( [1], Nh, [res.x[V/2-1]] ) )
+    Nv_out = np.fft.irfft( Nh )
+    return Nv_out

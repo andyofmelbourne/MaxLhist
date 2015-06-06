@@ -188,7 +188,6 @@ def refine(datas, iterations=1):
         # new counts 
         for d in datas:
             counts = []
-            # if there is only one var then skip this dataset
             if d.has_key('counts') : 
                 if d['counts']['update']: 
                     counts.append(ut.update_counts(d))

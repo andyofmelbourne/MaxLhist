@@ -3,11 +3,10 @@ import forward_model as fm
 import h5py
 from scipy.ndimage import gaussian_filter1d
 
-"""
 # test data
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.2, mus=None, ns=None, gs=None)
+counts = ns * np.sum(hists, axis=1)
 
-"""
 I = 250
 i      = np.arange(0, I, 1)
 f = np.exp( - (i - 100.).astype(np.float64)**2 / (2. * 20.) )
@@ -22,8 +21,10 @@ f = np.exp( - (i - 150.).astype(np.float64)**2 / (2. * 20.) )
 f = f / np.sum(f)
 d = f.copy()
 
+"""
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigmas = [5., 7.], pos = [100, 120], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
+"""
 
 hists2, mus, gs, ns2, Xv2 = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, sigmas = [5.], pos = [100], sigma_mu = 10., sigma_g = 0.1, mus=mus, ns=None, gs=gs)
 
@@ -61,7 +62,7 @@ data2 = {
 data = {
         'name'       : 'run',
         'histograms' : hists,
-        'vars'       : [background, sPhoton], 
+        'vars'       : [background, sPhoton, dPhoton], 
         'offset'     : data2['offset'],
         'gain'       : data2['gain'],
         'counts'     : {'update': False, 'value' : counts},
