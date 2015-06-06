@@ -33,19 +33,19 @@ hists2, mus, gs, ns2, Xv2 = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, s
 background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : b},
+        'function'  : {'update': False, 'value' : Xv[0]},
         }
 
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : s},
+        'function'  : {'update': False, 'value' : Xv[1]},
         }
 
 dPhoton = {
         'name'      : 'double photon',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : d},
+        'function'  : {'update': False, 'value' : Xv[2]},
         }
 
 # data
@@ -54,8 +54,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': True, 'value' : None},
+        'offset'     : {'update': False, 'value' : mus},
+        'gain'       : {'update': False, 'value' : gs},
         'comment'    : 'testing the X update'
         }
 
@@ -65,15 +65,99 @@ data = {
         'vars'       : [background, sPhoton, dPhoton], 
         'offset'     : data2['offset'],
         'gain'       : data2['gain'],
-        'counts'     : {'update': False, 'value' : counts},
+        'counts'     : {'update': True, 'value' : counts},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=5)
-result.show_fit('run', hists)
+#result = MaxLhist.refine([data2, data], iterations=5)
+#result.show_fit('run', hists)
 
+def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
+    hgm = roll_real(h, -mu)
+    hgm = gain(hgm, 1 / g)
+
+    # we don't need the zeros...
+    Is = np.where(hgm >= 1)[0]
+    hgm = hgm[Is]
+    
+    V   = len(Xv)
+    Yv  = np.fft.rfftn(np.array(Xv)[:, Is], axes=(0, )).conj() / V
+    print Yv.shape, V
+    def fi(Nh):
+        Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
+        out   = Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv, axis=0).real
+        print 'fi:', out.shape, out
+        return out
+    
+    def fun(Nh):
+        error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
+        return error
+    
+    def fprime(Nh):
+        out = - 2 * np.sum( hgm * Yv[1 :] / (fi(Nh) + 1.0e-10), axis=1)
+        out = np.concatenate( (out.real, out.imag))
+        print 'fprime:', out.shape
+        return out
+
+    # initial guess, need to fft then map to real
+    N = np.sum(h)
+    Nh_r   = np.fft.rfft( Nv / float(N) )[1 :]
+    Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
+    
+    res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
+    print res
+    
+    # solution, need to map to complex then ifft
+    Nh     = res.x[: (V-1) / 2] + 1J * res.x[(V-1) / 2 :]
+    Nh     = np.concatenate( ( [1], Nh ) )
+    Nv_out = np.fft.irfft( Nh, V ) 
+    print res.x.shape, Nh.shape, Nv_out.shape, V, np.array(Xv).shape, np.array(Xv)[:, Is].shape, Yv.shape
+    return Nv_out * N
+
+M   = hists.shape[0]
+
+m = 0
+
+Xv = [var['function']['value'] for var in data['vars']]
+h  = hists[m]
+N  = np.sum(h)
+Nv = data['counts']['value'][:, m] 
+g  = gs[m]
+mu = mus[m]
+
+hgm = ut.roll_real(h, -mu)
+hgm = ut.gain(hgm, 1 / g)
+
+# we don't need the zeros...
+#Is = np.where(hgm >= 0)[0]
+Is = np.arange(h.shape[0])
+hgm = hgm[Is]
+
+V   = len(Xv)
+Yv  = np.fft.rfftn(np.array(Xv)[:, Is], axes=(0, )).conj() / V
+print Yv.shape, V
+def fi(Nh):
+    Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
+    out   = Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv[1 :], axis=0).real
+    print 'fi:', out.shape, Nh_c
+    return out
+
+def fun(Nh):
+    error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
+    return error
+
+def fprime(Nh):
+    out = - 2 * np.sum( hgm * Yv[1 :] / (fi(Nh) + 1.0e-10), axis=1)
+    out = np.concatenate( (out.real, out.imag))
+    print 'fprime:', out.shape
+    return out
+
+N = np.sum(h)
+Nh_r   = np.fft.rfft( Nv / float(N) )[1 :]
+Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
+    
 """
 total_counts_v = np.sum(counts, axis=-1)
 total_counts   = np.sum(total_counts_v)
@@ -174,3 +258,13 @@ s_god  = S.pmf(i_range)
 print 'fidelity noise  :', np.sum(np.abs(d_god - result.result['electronic noise']['function'])**2) / np.sum(np.abs(d_god)**2)
 print 'fidelity sPhoton:', np.sum(np.abs(s_god - result.result['single photon']['function'])**2) / np.sum(np.abs(s_god)**2)
 """
+
+
+
+
+
+
+
+
+
+

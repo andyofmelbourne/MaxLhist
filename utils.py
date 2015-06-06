@@ -779,46 +779,54 @@ def update_counts(d):
     for m in range(M):
         Xv = [var['function']['value'] for var in d['vars']]
         h  = d['histograms'][m]
-        Nv = d['counts']['value'][:, m]
+        N  = np.sum(h)
+        Nv = d['counts']['value'][:, m] 
         
-        Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m])
+        Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m]) 
     
     return mus
     
 def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
     hgm = roll_real(h, -mu)
     hgm = gain(hgm, 1 / g)
-    
+
     # we don't need the zeros...
-    Is = np.where(hgm >= 1)
+    Is = np.where(hgm >= 1)[0]
     hgm = hgm[Is]
     
-    Yv  = np.fft.irfftn(np.array(Xv)[:, Is], axes=(0, ))
-    V   = Yv.shape[0]
+    V   = len(Xv)
+    Yv  = np.fft.rfftn(np.array(Xv)[:, Is], axes=(0, )).conj() / V
+    print Yv.shape, V
     def fi(Nh):
         Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
-        return Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv, axis=0).real
+        out   = Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv, axis=0).real
+        print 'fi:', out.shape, out
+        return out
     
     def fun(Nh):
         error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
         return error
     
     def fprime(Nh):
-        out = - 2 * np.sum( hgm * Yv / (fi(Nh) + 1.0e-10) )
-        return np.concatenate( (out.real, out.imag) )
+        out = - 2 * np.sum( hgm * Yv[1 :] / (fi(Nh) + 1.0e-10), axis=1)
+        out = np.concatenate( (out.real, out.imag))
+        print 'fprime:', out.shape
+        return out
 
     # initial guess, need to fft then map to real
-    Nh_r   = np.fft.rfft( Nv )[1 :]
+    N = np.sum(h)
+    Nh_r   = np.fft.rfft( Nv / float(N) )[1 :]
     Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
     
     res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
-    print res.x
+    print res
     
     # solution, need to map to complex then ifft
     Nh     = res.x[: (V-1) / 2] + 1J * res.x[(V-1) / 2 :]
     Nh     = np.concatenate( ( [1], Nh ) )
-    Nv_out = np.fft.irfft( Nh )
-    return Nv_out
+    Nv_out = np.fft.irfft( Nh, V ) 
+    print res.x.shape, Nh.shape, Nv_out.shape, V, np.array(Xv).shape, np.array(Xv)[:, Is].shape, Yv.shape
+    return Nv_out * N
 
 
 def update_counts_pix_even_V(h, Xv, Nv, g, mu):
@@ -841,14 +849,14 @@ def update_counts_pix_even_V(h, Xv, Nv, g, mu):
     
     def fprime(Nh):
         out = - 2 * np.sum( hgm * Yv / (fi(Nh) + 1.0e-10) )
-        return np.concatenate( (out.real, out.imag) )
+        return np.concatenate( ([out.real], [out.imag]) )
 
     # initial guess, need to fft then map to real
     Nh_r   = np.fft.rfft( Nv )[1 :]
     Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag[:-1]) )
     
     res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
-    print res.x
+    print res
     
     # solution, need to map to complex then ifft
     Nh     = res.x[: V / 2 - 1] + 1J * res.x[V / 2 :]
