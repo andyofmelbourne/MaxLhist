@@ -767,14 +767,17 @@ def update_counts(d):
     """
     """
     M   = d['histograms'].shape[0]
-    mus = np.zeros_like(d['offset']['value'])
+    mus = d['offset']['value']
     gs  = d['gain']['value']
     Nv_out = np.zeros_like(d['counts']['value'])
 
+    """
     if Nv_out.shape[0] % 2 == 0 : # even
         update_counts_pix = update_counts_pix_even_V
     else :
         update_counts_pix = update_counts_pix_odd_V
+    """
+    update_counts_pix = update_counts_brute
     
     for m in range(M):
         Xv = [var['function']['value'] for var in d['vars']]
@@ -784,8 +787,53 @@ def update_counts(d):
         
         Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m]) 
     
-    return mus
+    return Nv_out
     
+def update_counts_brute2(h, Xv, Nv, g, mu):
+    hgm = roll_real(h, -mu)
+    hgm = gain(hgm, 1 / g)
+    
+    # we don't need the zeros...
+    Is  = np.where(hgm >= 1)[0]
+    hgm = hgm[Is]
+    Xv2 = np.array(Xv)[:, Is]
+    
+    def fun(ns):
+        ns2 = ns / np.sum(ns)
+        error = - np.sum( hgm * np.log( np.sum( ns2[:, np.newaxis] * Xv2, axis=0) + 1.0e-10))
+        return error
+    
+    ns0    = Nv / float(np.sum(Nv))
+    bounds = []
+    for v in range(len(Xv)):
+        bounds.append( (0.0, 1.0) )
+    
+    res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
+    print res
+    Nv_out = res.x / np.sum(res.x) * float(np.sum(Nv))
+    return Nv_out
+
+def update_counts_brute(h, Xv, Nv, g, mu):
+    hgm = roll_real(h, -mu)
+    hgm = gain(hgm, 1 / g)
+    
+    # we don't need the zeros...
+    Is  = np.where(hgm >= 1)[0]
+    hgm = hgm[Is]
+    Xv2 = np.array(Xv)[:, Is]
+    
+    def fun(ns):
+        ns2 = np.concatenate( ([ 1 - np.sum(ns)], ns) )
+        error = - np.sum( hgm * np.log( np.sum( ns2[:, np.newaxis] * Xv2, axis=0) + 1.0e-10))
+        return error
+    
+    ns0    = Nv / float(np.sum(Nv))
+    bounds = ((0, 1.), (0, 1.))
+    
+    res    = scipy.optimize.minimize(fun, ns0[1:], bounds=bounds)
+    Nv_out = np.concatenate( ([ 1 - np.sum(res.x)], res.x) ) * float(np.sum(Nv))
+    return Nv_out
+
 def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
     hgm = roll_real(h, -mu)
     hgm = gain(hgm, 1 / g)

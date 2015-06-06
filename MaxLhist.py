@@ -127,7 +127,13 @@ def process_input(datas):
 
     # get the counts
     for data in datas:
+        init = False
         if not data.has_key('counts'):
+            init = True
+        if init == False :
+            if data['counts']['value'] is None :
+                init = True
+        if init :
             print 'initialising the counts for', data['name'] + "'s variables with the number of counts / number of vars."
             nvars  = len(data['vars'])
             counts = np.sum(data['histograms'], axis=-1).astype(np.float64) / float(nvars) 
@@ -187,11 +193,10 @@ def refine(datas, iterations=1):
         
         # new counts 
         for d in datas:
-            counts = []
-            if d.has_key('counts') : 
-                if d['counts']['update']: 
-                    counts.append(ut.update_counts(d))
-            
+            if d['counts']['update']: 
+                counts = ut.update_counts(d)
+            else :
+                counts = d['counts']['update']
             counts_temp.append(counts)
         
         # update the current guess
@@ -208,9 +213,8 @@ def refine(datas, iterations=1):
                 vars[j]['function']['value'] = vars_temp[j]['function']['value']
         
         for j in range(len(datas)):
-            if d.has_key('counts') : 
-                if d['counts']['update']: 
-                    datas[j]['counts'] = np.array(counts_temp[j])
+            if datas[j]['counts']['update']: 
+                datas[j]['counts']['value'] = np.array(counts_temp[j])
         
         e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)

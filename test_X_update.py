@@ -2,9 +2,15 @@ import MaxLhist
 import forward_model as fm
 import h5py
 from scipy.ndimage import gaussian_filter1d
+import numpy as np
+import utils as ut
+import scipy
 
 # test data
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.2, mus=None, ns=None, gs=None)
+M = 100
+N = 10000
+
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
 
 I = 250
@@ -26,7 +32,7 @@ hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigm
 counts = ns * np.sum(hists, axis=1)
 """
 
-hists2, mus, gs, ns2, Xv2 = fm.forward_model_nvars(I=250, M=1000, N=1000, V=1, sigmas = [5.], pos = [100], sigma_mu = 10., sigma_g = 0.1, mus=mus, ns=None, gs=gs)
+hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], pos = [100], sigma_mu = 0., sigma_g = 0.0, mus=mus, ns=None, gs=gs)
 
 # Random variables
 #-----------------
@@ -65,18 +71,43 @@ data = {
         'vars'       : [background, sPhoton, dPhoton], 
         'offset'     : data2['offset'],
         'gain'       : data2['gain'],
-        'counts'     : {'update': True, 'value' : counts},
+        'counts'     : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-#result = MaxLhist.refine([data2, data], iterations=5)
-#result.show_fit('run', hists)
+result = MaxLhist.refine([data], iterations=2)
+
+print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
+
+result.show_fit('run', hists)
+"""
+def update_counts_brute(h, Xv, Nv, g, mu):
+    hgm = ut.roll_real(h, -mu)
+    hgm = ut.gain(hgm, 1 / g)
+    
+    # we don't need the zeros...
+    Is = np.where(hgm >= 1)[0]
+    hgm = hgm[Is]
+    Xv2 = np.array(Xv)[:, Is]
+    
+    def fun(ns):
+        ns2 = np.concatenate( ([ 1 - np.sum(ns)], ns) )
+        error = - np.sum( hgm * np.log( np.sum( ns2[:, np.newaxis] * Xv2, axis=0) + 1.0e-10))
+        return error
+    
+    ns0    = Nv / float(np.sum(Nv))
+    bounds = ((0, 1.), (0, 1.))
+    
+    res    = scipy.optimize.minimize(fun, ns0[1:], bounds=bounds)
+    print res
+    Nv_out = np.concatenate( ([ 1 - np.sum(res.x)], res.x) ) * float(np.sum(Nv))
+    return Nv_out
 
 def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
-    hgm = roll_real(h, -mu)
-    hgm = gain(hgm, 1 / g)
+    hgm = ut.roll_real(h, -mu)
+    hgm = ut.gain(hgm, 1 / g)
 
     # we don't need the zeros...
     Is = np.where(hgm >= 1)[0]
@@ -84,21 +115,19 @@ def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
     
     V   = len(Xv)
     Yv  = np.fft.rfftn(np.array(Xv)[:, Is], axes=(0, )).conj() / V
-    print Yv.shape, V
     def fi(Nh):
         Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
-        out   = Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv, axis=0).real
-        print 'fi:', out.shape, out
+        out   = Yv[0].real + 2 * np.sum( Nh_c[:, np.newaxis] * Yv[1 :], axis=0).real
+        #out[np.where(out < 0)] = 0
         return out
     
     def fun(Nh):
-        error = - np.sum( hgm * np.log( fi(Nh) + 1.0e-10))
+        error = - np.sum( hgm * np.log( fi(Nh) + 1.0))
         return error
     
     def fprime(Nh):
         out = - 2 * np.sum( hgm * Yv[1 :] / (fi(Nh) + 1.0e-10), axis=1)
         out = np.concatenate( (out.real, out.imag))
-        print 'fprime:', out.shape
         return out
 
     # initial guess, need to fft then map to real
@@ -106,33 +135,48 @@ def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
     Nh_r   = np.fft.rfft( Nv / float(N) )[1 :]
     Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
     
-    res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime)
-    print res
+    def gtzero(x, n=0):
+        Nh     = x[: (V-1) / 2] + 1J * x[(V-1) / 2 :]
+        Nh     = np.concatenate( ( [1], Nh ) )
+        Nv_out = np.fft.irfft( Nh, V ) 
+        return Nv_out[n]
+    
+    cons = ({'type': 'ineq', 'fun': lambda x: gtzero(x, 0)}, 
+            {'type': 'ineq', 'fun': lambda x: gtzero(x, 1)},
+            {'type': 'ineq', 'fun': lambda x: gtzero(x, 2)})
+    #res    = scipy.optimize.minimize(fun, Nh_r, jac=fprime, constraints=cons)
+    res    = scipy.optimize.minimize(fun, Nh_r, constraints=cons)
+    #print res
     
     # solution, need to map to complex then ifft
     Nh     = res.x[: (V-1) / 2] + 1J * res.x[(V-1) / 2 :]
     Nh     = np.concatenate( ( [1], Nh ) )
     Nv_out = np.fft.irfft( Nh, V ) 
-    print res.x.shape, Nh.shape, Nv_out.shape, V, np.array(Xv).shape, np.array(Xv)[:, Is].shape, Yv.shape
+    #print res.x.shape, Nh.shape, Nv_out.shape, V, np.array(Xv).shape, np.array(Xv)[:, Is].shape, Yv.shape
     return Nv_out * N
+
 
 M   = hists.shape[0]
 
-m = 0
+for m in range(5):
 
-Xv = [var['function']['value'] for var in data['vars']]
-h  = hists[m]
-N  = np.sum(h)
-Nv = data['counts']['value'][:, m] 
-g  = gs[m]
-mu = mus[m]
+    Xv = [var['function']['value'] for var in data['vars']]
+    h  = hists[m]
+    N  = np.sum(h)
+    Nv = data['counts']['value'][:, m] 
+    g  = gs[m]
+    mu = mus[m]
+    #x = update_counts_pix_odd_V(h, Xv, counts[:, m], g, mu)
+    Nv0 = np.array([N/3., N/3., N/3.])
+    x = update_counts_brute(h, Xv, Nv0, g, mu)
+    print x, counts[:, m]
 
 hgm = ut.roll_real(h, -mu)
 hgm = ut.gain(hgm, 1 / g)
 
 # we don't need the zeros...
-#Is = np.where(hgm >= 0)[0]
-Is = np.arange(h.shape[0])
+Is = np.where(hgm >= 1)[0]
+#Is = np.arange(h.shape[0])
 hgm = hgm[Is]
 
 V   = len(Xv)
@@ -140,8 +184,9 @@ Yv  = np.fft.rfftn(np.array(Xv)[:, Is], axes=(0, )).conj() / V
 print Yv.shape, V
 def fi(Nh):
     Nh_c  = Nh[: (V-1) / 2] + 1J * Nh[(V-1) / 2 :]
-    out   = Yv[0].real + np.sum( Nh_c[:, np.newaxis] * Yv[1 :], axis=0).real
+    out   = Yv[0].real + 2 * np.sum( Nh_c[:, np.newaxis] * Yv[1 :], axis=0).real
     print 'fi:', out.shape, Nh_c
+    out[np.where(out < 0)] = 0
     return out
 
 def fun(Nh):
@@ -154,11 +199,17 @@ def fprime(Nh):
     print 'fprime:', out.shape
     return out
 
-N = np.sum(h)
+N = float(np.sum(h))
 Nh_r   = np.fft.rfft( Nv / float(N) )[1 :]
 Nh_r   = np.concatenate( (Nh_r.real, Nh_r.imag) )
     
-"""
+errors = []
+for nx in np.arange(-1, 1, 0.01):
+    for ny in np.arange(-1, 1, 0.01):
+        errors.append(fun(np.array([nx, ny])))
+errors = np.array(errors).reshape( (np.sqrt(len(errors)), np.sqrt(len(errors))) )
+
+
 total_counts_v = np.sum(counts, axis=-1)
 total_counts   = np.sum(total_counts_v)
 
