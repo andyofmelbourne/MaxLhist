@@ -327,16 +327,20 @@ And... drum roll please:
    &= - \sum_i^I \frac{h^m_{(i+\mu_m)/g_m}}{f^m_i} \frac{\partial}{\partial \hat{n}^m_u} \sum_v n^m_v X^v_i \\
    &= - 2 \sum_i^I \frac{h^m_{(i+\mu_m)/g_m}}{f^m_i} Y^{u}_i \quad \text{for odd V} 
 \end{align*}
-when $V$ is even there is an annoying extra (real) positive Fourier component when evaluating $\frac{\partial f^m_i}{\partial \hat{n}^m_u}$ leading to:
+
+
+When $V$ is even there is an annoying extra (real) positive Fourier component when evaluating $\frac{\partial f^m_i}{\partial \hat{n}^m_u}$ leading to:
 \begin{align*}
    \frac{\partial \varepsilon_m}{\partial \hat{n}^m_u} &= - 2 \sum_i^I \frac{h^m_{(i+\mu_m)/g_m}}{f^m_i} Y^{u}_i && \text{for even V and } u \neq V/2 \\
    &= - \sum_i^I \frac{h^m_{(i+\mu_m)/g_m}}{f^m_i} \Re\{Y^{u}_i\} &&\text{for even V and } u = V/2 
 \end{align*}
 actually $Y^{V/2}_i$ is automatically real when V is even, but I just wanted to be sure that you know that $\Im\{ \hat{n}^m_{V/2}\}$ is not a variable in this case.
 
-
-
-
+For both odd and even V the error is:
+\begin{align*}
+   \varepsilon_m &= - \sum_i^I h^m_{(i+\mu_m)/g_m} \ln\left(\sum_v n^m_v X^v_i\right) \\
+   &= - \sum_i^I h^m_{(i+\mu_m)/g_m} \ln\left(Y^0_i + 2\Re\left\{\sum_{f_u=1}^{V_h} \hat{n}^m_{f_u} Y^{f_u}_i\right\}\right)
+\end{align*}
 
 
 
