@@ -728,7 +728,7 @@ def update_mus_gain_pix(hms, fms, quadfit = True):
         if (mu > mus_t[0]) and (mu < mus_t[-1]) and (p[0] < 0) :
             cor_max = p[0] * mu**2 + p[1] * mu + p[2]
         else :
-            print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape
+            print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape, p, vs
             mu      = fftfreq[mu_0]
             cor_max = cor_max0
         
@@ -777,7 +777,7 @@ def update_counts(d):
     else :
         update_counts_pix = update_counts_pix_odd_V
     """
-    update_counts_pix = update_counts_brute
+    update_counts_pix = update_counts_brute2
     
     for m in range(M):
         Xv = [var['function']['value'] for var in d['vars']]
@@ -809,7 +809,6 @@ def update_counts_brute2(h, Xv, Nv, g, mu):
         bounds.append( (0.0, 1.0) )
     
     res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
-    print res
     Nv_out = res.x / np.sum(res.x) * float(np.sum(Nv))
     return Nv_out
 
@@ -911,3 +910,32 @@ def update_counts_pix_even_V(h, Xv, Nv, g, mu):
     Nh     = np.concatenate( ( [1], Nh, [res.x[V/2-1]] ) )
     Nv_out = np.fft.irfft( Nh )
     return Nv_out
+
+
+def minimise_overlap(vars, iters = 10, neg_tol = 0.001):
+    """
+    recursively subtract X's from the others while keeping X positive
+    by 'positive' we mean np.sum(X[np.where(X<0)]) / np.sum(X[np.where(X>0)]) < neg_tol
+    """
+    vars_out  = list(vars)
+    for k in range(iters):
+        for i in range(len(vars_out)):
+            if vars_out[i]['function']['update']:
+                # loop over every function that is not our function
+                for j in range(len(vars_out)):
+                    if i != j :
+                        # subtract as much of vars[j] as we can such that vars[i] - vars[j] is not negative (or within neg_tol)
+                        n = 0.0
+                        p = 1.0
+                        while (n / p) <= neg_tol:
+                            vars_out[i]['function']['value'] -= 0.001 * vars_out[j]['function']['value']
+                            f = vars_out[i]['function']['value']
+                            n = np.abs(np.sum(f[np.where(f < 0.0)]))
+                            p = np.sum(np.sum(f[np.where(f > 0.0)]))
+                    # enforce positivity
+                    vars_out[i]['function']['value'][np.where(vars_out[i]['function']['value']<0)] = 0.0
+                    # enforce normalisation
+                    vars_out[i]['function']['value'] /= np.sum(vars_out[i]['function']['value'])
+     
+    Xvs = [v['function']['value'] for v in vars_out] 
+    return Xvs

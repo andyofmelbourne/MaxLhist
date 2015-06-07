@@ -8,7 +8,7 @@ import scipy
 
 # test data
 M = 1000
-N = 1000
+N = 2000
 
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
@@ -77,11 +77,11 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=5)
+result = MaxLhist.refine([data2, data], iterations=10)
 
 print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
 
-#result.show_fit('run', hists)
+result.show_fit('run', hists)
 """
 def update_counts_brute(h, Xv, Nv, g, mu):
     hgm = ut.roll_real(h, -mu)

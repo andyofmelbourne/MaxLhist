@@ -161,7 +161,6 @@ def refine(datas, iterations=1):
     offsets_temp   = list(offsets)
     gains_temp     = list(gains)
     vars_temp      = list(vars)
-    counts_temp    = []
     
     e   = ut.log_likelihood_calc_many(datas)
     errors.append(e)
@@ -186,12 +185,15 @@ def refine(datas, iterations=1):
                     offsets_temp[j]['value'] = ut.update_mus_not_gain(ds)
         
         # new functions 
+        print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
         Xv = ut.update_fs_new(vars, datas)
             
         for v in range(len(vars)):
             vars_temp[v]['function']['value'] = Xv[v]
         
         # new counts 
+        print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
+        counts_temp    = []
         for d in datas:
             if d['counts']['update']: 
                 counts = ut.update_counts(d)
@@ -215,10 +217,31 @@ def refine(datas, iterations=1):
         for j in range(len(datas)):
             if datas[j]['counts']['update']: 
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
+
+        # minimise overlap on the X's
+        #----------------------------
+        Xv = ut.minimise_overlap(vars)
+        for v in range(len(vars)):
+            vars_temp[v]['function']['value'] = Xv[v]
+        for j in range(len(vars)):
+            if vars[j]['function']['update'] :
+                vars[j]['function']['value'] = vars_temp[j]['function']['value']
+        # new counts 
+        counts_temp    = []
+        for d in datas:
+            if d['counts']['update']: 
+                counts = ut.update_counts(d)
+            else :
+                counts = d['counts']['update']
+            counts_temp.append(counts)
+        for j in range(len(datas)):
+            if datas[j]['counts']['update']: 
+                datas[j]['counts']['value'] = np.array(counts_temp[j])
         
         e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)
         print i+1, 'log likelihood error:', e
+
     
     errors = np.array(errors)
     
