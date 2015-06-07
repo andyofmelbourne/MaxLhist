@@ -7,8 +7,8 @@ import utils as ut
 import scipy
 
 # test data
-M = 100
-N = 10000
+M = 1000
+N = 1000
 
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
@@ -39,19 +39,19 @@ hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigma
 background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
-        'function'  : {'update': False, 'value' : Xv[0]},
+        'function'  : {'update': True, 'value' : b},
         }
 
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': False, 'value' : Xv[1]},
+        'function'  : {'update': True, 'value' : s},
         }
 
 dPhoton = {
         'name'      : 'double photon',
         'type'      : 'random variable',
-        'function'  : {'update': False, 'value' : Xv[2]},
+        'function'  : {'update': True, 'value' : d},
         }
 
 # data
@@ -60,8 +60,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': False, 'value' : mus},
-        'gain'       : {'update': False, 'value' : gs},
+        'offset'     : {'update': True, 'value' : mus},
+        'gain'       : {'update': True, 'value' : gs},
         'comment'    : 'testing the X update'
         }
 
@@ -77,11 +77,11 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data], iterations=2)
+result = MaxLhist.refine([data2, data], iterations=5)
 
-print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
+print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
 
-result.show_fit('run', hists)
+#result.show_fit('run', hists)
 """
 def update_counts_brute(h, Xv, Nv, g, mu):
     hgm = ut.roll_real(h, -mu)
