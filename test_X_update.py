@@ -61,7 +61,7 @@ data2 = {
         'histograms' : hists2,
         'vars'       : [background], 
         'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': True, 'value' : None},
+        'gain'       : {'update': False, 'value' : np.ones_like(gs)},
         'comment'    : 'testing the X update'
         }
 

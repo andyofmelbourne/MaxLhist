@@ -309,9 +309,15 @@ class Result():
         gs_name = dataname + ' gain'
         gs      = self.result[dataname]['gain']
 
-        counts   = self.result[dataname]['counts']
+        counts       = self.result[dataname]['counts']
+        counts_names = self.result[dataname]['vars']
         
         hists1 = fm.forward_hists_nvar(fs, mus, gs, counts)
+
+        # get the sum of the unshifted and ungained histograms
+        hist_proj = np.sum(ut.ungain_unshift_hist(hists, mus, gs), axis=0)
+        total_counts = np.sum(hist_proj)
+        hist_proj = hist_proj / total_counts
          
         m_sort = np.argsort(p_errors)
         
@@ -320,21 +326,16 @@ class Result():
         import pyqtgraph as pg
         import PyQt4.QtGui
         import PyQt4.QtCore
-        # Always start by initializing Qt (only once per application)
         app = PyQt4.QtGui.QApplication([])
-        # Define a top-level widget to hold everything
         win = pg.GraphicsWindow(title="results")
         pg.setConfigOptions(antialias=True)
         
         # show f and the mu values
-        p1 = win.addPlot(title='functions')
+        Xplot = win.addPlot(title='functions')
+        Xplot.plot(x = i_range, y = np.sum(fs[i] * np.sum(counts[i]) / total_counts, axis=0), fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        f_tot = np.zeros_like(fs[0])
         for i in range(len(fs)):
-            p1.plot(x = i_range, y = fs[i], pen=(i, len(fs)))
-        
-        p2 = win.addPlot(title=mus_name, name = 'mus')
-        p2.plot(mus[m_sort],  pen=(0, 255, 0))
-        
-        win.nextRow()
+            Xplot.plot(x = i_range, y = fs[i] * np.sum(counts[i]) / total_counts, pen=(i, len(fs)))
         
         # now plot the histograms
         m      = 0
@@ -351,20 +352,37 @@ class Result():
             curve_his.setData(hists[m])
             curve_fit.setData(hists1[m])
         
-        p3 = win.addPlot(title='pixel errors', name = 'p_errors')
-        p3.plot(p_errors[m_sort], pen=(255, 255, 255))
-        p3.setXLink('mus')
+        p_error_plot = win.addPlot(title='pixel errors', name = 'p_errors')
+        p_error_plot.plot(p_errors[m_sort], pen=(255, 255, 255))
+        p_error_plot.setXLink('mus')
 
         hline = pg.InfiniteLine(angle=90, movable=True, bounds = [0, mus.shape[0]-1])
         #hline.sigPositionChangeFinished.connect(replot)
         hline.sigPositionChanged.connect(replot)
-        p3.addItem(hline)
-
+        p_error_plot.addItem(hline)
+        
         win.nextRow()
+        
+        muplot = win.addPlot(title=mus_name, name = 'mus')
+        muplot.plot(mus[m_sort],  pen=(0, 255, 0))
+        
+        gplot = win.addPlot(title=gs_name, name = 'gs')
+        gplot.plot(gs[m_sort],  pen=(0, 255, 0))
+        gplot.setXLink('mus')
         
         p4 = win.addPlot(title="log likelihood error", y = errors)
         p4.showGrid(x=True, y=True) 
+
+        win.nextRow()
+
+        cplots = []
+        for c in range(counts.shape[0]):
+            cplots.append(win.addPlot(title=counts_names[c] + ' counts: ' + str(int(np.sum(counts[c]))), name = counts_names[c]))
+            cplots[-1].plot(counts[c],  pen=(200, 200, 200))
+            cplots[-1].setXLink('mus')
+
         sys.exit(app.exec_())
+
             
 if __name__ == '__main__':
     print 'executing :', sys.argv[1]
