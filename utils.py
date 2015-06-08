@@ -29,7 +29,7 @@ def roll(a, x):
     b    = np.fft.ifft(A * ramp)
     return b
 
-def roll_real(a, x):
+def roll_real(a, x, keep_positive = True):
     """
     roll f by x pixels 
     uses np.fft.rfft to roll the axis
@@ -55,6 +55,9 @@ def roll_real(a, x):
     A    = np.fft.rfft(a)
     ramp = np.exp(-2.0J * np.pi * x * np.arange(N//2 + 1) / float(N))
     b    = np.fft.irfft(A * ramp)
+
+    if keep_positive :
+        b[np.where(b<0)] = 0.0
     return b
 
 def make_f_real(fhats, f_norm = 0.0):
@@ -466,7 +469,7 @@ def ungain_unshift_hist(hists, mus, gs):
         hist_adj[m] = gain(hist_adj[m], 1. / gs[m]) #/ total_counts
     return hist_adj
 
-def update_fs_new(vars, datas, normalise = True, smooth = 1.):
+def update_fs_new(vars, datas, normalise = True):
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)
@@ -475,12 +478,13 @@ def update_fs_new(vars, datas, normalise = True, smooth = 1.):
     counts = np.zeros((V, M * D), dtype=np.float64)
     X      = np.zeros((V, I), dtype=np.float64)
 
-    bounds = []
-    for v in range(V):
-        bounds.append( (0.0, 1.0) )
-
     update_vs  = np.where([v['function']['update'] for v in vars])[0]
     nupdate_vs = np.where([not v['function']['update'] for v in vars])[0]
+
+    bounds = []
+    for v in update_vs:
+        bounds.append( (0.0, 1.0) )
+
     if len(update_vs) == 0 :
         for v in range(V):
             X[v, :] = vars[v]['function']['value']
@@ -529,9 +533,10 @@ def update_fs_new(vars, datas, normalise = True, smooth = 1.):
     # positivity
     X[np.where(X<0)] = 0
     
-    if smooth != 0 :
-        for v in range(V):
-            X[v, :] = gaussian_filter1d(X[v], smooth)
+    for v in range(V):
+        if vars[v].has_key('smooth'):
+            if vars[v]['smooth'] > 0 :
+                X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
     
     if normalise :
         for v in range(V):
