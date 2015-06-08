@@ -7,8 +7,8 @@ import utils as ut
 import scipy
 
 # test data
-M = 1000
-N = 2000
+M = 100
+N = 200
 
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
 counts = ns * np.sum(hists, axis=1)
@@ -61,7 +61,7 @@ data2 = {
         'histograms' : hists2,
         'vars'       : [background], 
         'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': False, 'value' : np.ones_like(gs)},
+        'gain'       : {'update': True, 'value' : np.ones_like(gs)},
         'comment'    : 'testing the X update'
         }
 
@@ -80,6 +80,8 @@ data = {
 result = MaxLhist.refine([data2, data], iterations=3)
 
 print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
+print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)
+print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
 
 result.show_fit('run', hists)
 """

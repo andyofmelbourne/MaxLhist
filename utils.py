@@ -234,7 +234,6 @@ def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
         # evaluate the shifted probability function
         fs = gain(f, gs[m])
         fs = roll_real(f, mus[m])[Is] 
-        fs[np.where(fs < 0)] = 0.0
 
         # sum the log liklihood errors for this pixel
         e  = hists[m, Is] * np.log(prob_tol + fs)
@@ -467,7 +466,7 @@ def ungain_unshift_hist(hists, mus, gs):
         hist_adj[m] = gain(hist_adj[m], 1. / gs[m]) #/ total_counts
     return hist_adj
 
-def update_fs_new(vars, datas, normalise = True, smooth = 2.):
+def update_fs_new(vars, datas, normalise = True, smooth = 1.):
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)

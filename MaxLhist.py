@@ -315,9 +315,9 @@ class Result():
         hists1 = fm.forward_hists_nvar(fs, mus, gs, counts)
 
         # get the sum of the unshifted and ungained histograms
-        hist_proj = np.sum(ut.ungain_unshift_hist(hists, mus, gs), axis=0)
+        hist_proj    = np.sum(ut.ungain_unshift_hist(hists, mus, gs), axis=0)
         total_counts = np.sum(hist_proj)
-        hist_proj = hist_proj / total_counts
+        hist_proj    = hist_proj / total_counts
          
         m_sort = np.argsort(p_errors)
         
@@ -332,10 +332,11 @@ class Result():
         
         # show f and the mu values
         Xplot = win.addPlot(title='functions')
-        Xplot.plot(x = i_range, y = np.sum(fs[i] * np.sum(counts[i]) / total_counts, axis=0), fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        Xplot.plot(x = i_range, y = hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
         f_tot = np.zeros_like(fs[0])
         for i in range(len(fs)):
-            Xplot.plot(x = i_range, y = fs[i] * np.sum(counts[i]) / total_counts, pen=(i, len(fs)))
+            Xplot.plot(x = i_range, y = fs[i] * np.sum(counts[i]) / total_counts + 1.0e-10, pen=(i, len(fs)+1), width = 10)
+        Xplot.plot(x = i_range, y = np.sum(fs * np.sum(counts, axis=-1)[:, np.newaxis] / total_counts, axis=0) + 1.0e-10, pen=(len(fs), len(fs)+1), width = 10)
         
         # now plot the histograms
         m      = 0
@@ -378,7 +379,7 @@ class Result():
         cplots = []
         for c in range(counts.shape[0]):
             cplots.append(win.addPlot(title=counts_names[c] + ' counts: ' + str(int(np.sum(counts[c]))), name = counts_names[c]))
-            cplots[-1].plot(counts[c],  pen=(200, 200, 200))
+            cplots[-1].plot(counts[c],  pen=(c, counts.shape[0]+1))
             cplots[-1].setXLink('mus')
 
         sys.exit(app.exec_())
