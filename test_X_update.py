@@ -60,8 +60,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': True, 'value' : mus},
-        'gain'       : {'update': True, 'value' : gs},
+        'offset'     : {'update': True, 'value' : None},
+        'gain'       : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
@@ -77,7 +77,7 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=10)
+result = MaxLhist.refine([data2, data], iterations=3)
 
 print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
 

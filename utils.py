@@ -467,7 +467,7 @@ def ungain_unshift_hist(hists, mus, gs):
         hist_adj[m] = gain(hist_adj[m], 1. / gs[m]) #/ total_counts
     return hist_adj
 
-def update_fs_new(vars, datas, normalise = True, smooth = 0):
+def update_fs_new(vars, datas, normalise = True, smooth = 2.):
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)
@@ -527,10 +527,13 @@ def update_fs_new(vars, datas, normalise = True, smooth = 0):
         else :
             X[update_vs, j] = res.x
 
+    # positivity
+    X[np.where(X<0)] = 0
+    
     if smooth != 0 :
         for v in range(V):
             X[v, :] = gaussian_filter1d(X[v], smooth)
-
+    
     if normalise :
         for v in range(V):
             X[v, :] = X[v, :] / np.sum(X[v, :])
