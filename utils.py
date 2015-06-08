@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from scipy.ndimage import gaussian_filter1d
+from multiprocessing import Pool 
 
 def roll(a, x):
     """
@@ -179,25 +180,38 @@ def log_likelihood_calc(f, mus, hists, prob_tol = 1.0e-10, pixelwise = False):
             error -= np.sum(e)
     return error
 
+
+def log_likelihood_calc_many_pool((m, Xv, counts_m, hists_m, gs_m, mus_m, prob_tol)):
+    f  = np.sum([Xv[v] * counts_m[v] for v in range(len(Xv))], axis=0)
+    f  = f / np.sum(f)
+    Is = np.where(hists_m > 0)
+    
+    # evaluate the gained then shifted probability function
+    f = gain(f, gs_m) 
+    f = roll_real(f, mus_m)[Is]
+    f[np.where(f < 0)] = 0.0
+
+    # sum the log liklihood errors for this pixel
+    e  = hists_m[Is] * np.log(prob_tol + f)
+    return np.sum(e)
+
+
 def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
     error = 0.0
     for d in datas:
         hists = d['histograms']
         mus   = d['offset']['value']
         gs    = d['gain']['value'] 
-        for m in range(len(hists)):
-            f  = forward_fs(d, m)
-            Is = np.where(hists[m] > 0)
-            
-            # evaluate the gained then shifted probability function
-            f = gain(f, gs[m]) 
-            f = roll_real(f, mus[m])[Is]
-            f[np.where(f < 0)] = 0.0
 
-            # sum the log liklihood errors for this pixel
-            e  = hists[m, Is] * np.log(prob_tol + f)
-            error += np.sum(e)
-    return -error
+        Xv   = np.array([d['vars'][v]['function']['value'] for v in range(len(d['vars']))])
+        args = []
+        for m in range(len(hists)):
+            args.append( (m, Xv, d['counts']['value'][:, m], hists[m], gs[m], mus[m], prob_tol) )
+            
+        pool  = Pool(processes=None)
+        errors = pool.map(log_likelihood_calc_many_pool, args)
+        error  = -np.sum(errors)
+    return error
 
 def log_likelihood_calc_pixelwise(f, mus, hists, prob_tol = 1.0e-10):
     """
@@ -650,12 +664,20 @@ def update_mus_gain(ds, normalise = True, quadfit = True):
     M   = ds[0]['histograms'].shape[0]
     mus = np.zeros_like(ds[0]['offset']['value'])
     gs  = np.zeros_like(ds[0]['gain']['value'])
+    args = []
     for m in range(M):
         fms    = [forward_fs(d, m) for d in ds]
         hms    = [d['histograms'][m] for d in ds]
+        args.append((list(hms), list(fms), quadfit))
+        """
         mu, g  = update_mus_gain_pix(hms, fms, quadfit = quadfit)
         mus[m] = mu
         gs[m]  = g
+        """
+    pool   = Pool(processes=None)
+    mug    = pool.map(update_mus_gain_pix, args)
+    mus    = np.array([m[0] for m in mug])
+    gs     = np.array([g[1] for g in mug])
     
     if normalise :
         mus = mus - np.sum(mus)/float(len(mus))
@@ -708,7 +730,7 @@ def update_mus_not_gain_pix(hms, fms, g, quadfit = True):
     return mu
     
 
-def update_mus_gain_pix(hms, fms, quadfit = True):
+def update_mus_gain_pix((hms, fms, quadfit)):
     """    
     calculate the minimum of e(g) = - max [sum_data h .conv. ln(f(g*i))]
     then return g and i

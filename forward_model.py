@@ -1,8 +1,23 @@
 import numpy as np
 import scipy.stats
 import utils as ut
+from multiprocessing import Pool 
 
-def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 20., sigma_g = 0.2, mus=None, ns=None, gs=None):
+
+def generate_hist_pix((m, ns_m, Xv, i, mus_m, gs_m, N, V, i_bins)):
+    f = np.zeros_like(Xv[0])
+    for v in range(V):
+        f += ns_m[v] * Xv[v]
+    
+    f = ut.gain(f, gs_m)
+    f = ut.roll_real(f, mus_m)
+    # create a new random variable with the offset and gain value
+    F       = scipy.stats.rv_discrete(name='F', values = (i, f))
+    ff      = F.rvs(size = N)
+    hist, bins = np.histogram(ff, bins = i_bins)
+    return hist
+
+def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 20., sigma_g = 0.2, mus=None, ns=None, gs=None, processes=None):
     """
     probability dist for pixel m at adu i: f_{g_m i - mu_m} = sum_v n^m_v X^v_i
     where m: 0 --> M-1
@@ -51,6 +66,15 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
         gs = Gm.rvs(M)
         gs = gs / np.mean(gs)
 
+    args = []
+    for m in range(M):
+        args.append( (m, ns[:, m], Xv, i, mus[m], gs[m], N, V, i_bins) )
+
+    pool  = Pool(processes=processes)
+    hists = pool.map(generate_hist_pix, args)
+    hists = np.array(hists)
+
+    """
     f = np.zeros_like(Xv[0])
     hists = []
     for m in range(M):
@@ -60,14 +84,13 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
             f += ns[v, m] * Xv[v]
         
         # create a new random variable with the offset and gain value
-        f_gain  = ut.gain(f, gs[m])
-        f_shift = ut.roll_real(f_gain, mus[m]) 
-        F       = scipy.stats.rv_discrete(name='F', values = (i, f_shift))
-        ff      = F.rvs(size = N)
+        F       = scipy.stats.rv_discrete(name='F', values = (i, f))
+        ff      = mus[m] + F.rvs(size = N) * gs[m]
         hist, bins = np.histogram(ff, bins = i_bins)
         hists.append(hist)
     
     hists = np.array(hists)
+    """
     return hists, mus, gs, ns, Xv
 
 def forward_hists_nvar(Xv, mus, gs, counts):
