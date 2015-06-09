@@ -6,11 +6,13 @@ import numpy as np
 import utils as ut
 import scipy
 
+processes = 10
+
 # test data
 M = 1000
 N = 2000
 
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None, processes = processes)
 counts = ns * np.sum(hists, axis=1)
 
 I = 250
@@ -32,7 +34,7 @@ hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigm
 counts = ns * np.sum(hists, axis=1)
 """
 
-hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], pos = [100], sigma_mu = 0., sigma_g = 0.0, mus=mus, ns=None, gs=gs)
+hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], pos = [100], sigma_mu = 0., sigma_g = 0.0, mus=mus, ns=None, gs=gs, processes = processes)
 
 # Random variables
 #-----------------
@@ -80,7 +82,7 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=1)
+result = MaxLhist.refine([data2, data], iterations=10, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)

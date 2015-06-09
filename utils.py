@@ -196,7 +196,7 @@ def log_likelihood_calc_many_pool((m, Xv, counts_m, hists_m, gs_m, mus_m, prob_t
     return np.sum(e)
 
 
-def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
+def log_likelihood_calc_many(datas, prob_tol = 1.0e-10, processes = 1):
     error = 0.0
     for d in datas:
         hists = d['histograms']
@@ -208,7 +208,7 @@ def log_likelihood_calc_many(datas, prob_tol = 1.0e-10):
         for m in range(len(hists)):
             args.append( (m, Xv, d['counts']['value'][:, m], hists[m], gs[m], mus[m], prob_tol) )
             
-        pool  = Pool(processes=None)
+        pool  = Pool(processes=processes)
         errors = pool.map(log_likelihood_calc_many_pool, args)
         error  = -np.sum(errors)
     return error
@@ -481,7 +481,7 @@ def ungain_unshift_hist_pool((hist_m, mu_m, g_m)):
     hist_adj = gain(hist_adj, 1. / g_m) 
     return hist_adj
 
-def ungain_unshift_hist(hists, mus, gs):
+def ungain_unshift_hist(hists, mus, gs, processes = 1):
     args     = [(hists[m], mus[m], gs[m]) for m in range(hists.shape[0])]
     pool     = Pool(processes=None)
     hist_adj = np.array(pool.map(ungain_unshift_hist_pool, args))
@@ -516,7 +516,7 @@ def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bou
 
     return X
 
-def update_fs_new(vars, datas, normalise = True):
+def update_fs_new(vars, datas, normalise = True, processes = 1):
     # join the histograms and counts into a big histogram thing
     M = datas[0]['histograms'].shape[0]
     D = len(datas)
@@ -537,9 +537,9 @@ def update_fs_new(vars, datas, normalise = True):
     
     for d in range(0, D):
         if d == 0 :
-            hist = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'])
+            hist = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'], processes = processes)
         else : 
-            hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'])))
+            hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'])), processes = processes)
         
         # fill the counts for datas vars
         for v in range(V):
@@ -674,7 +674,7 @@ def forward_fs(data, m):
     return f / np.sum(f)
 
 
-def update_mus_gain(ds, normalise = True, quadfit = True):
+def update_mus_gain(ds, normalise = True, quadfit = True, processes = 1):
     M   = ds[0]['histograms'].shape[0]
     mus = np.zeros_like(ds[0]['offset']['value'])
     gs  = np.zeros_like(ds[0]['gain']['value'])
@@ -688,7 +688,7 @@ def update_mus_gain(ds, normalise = True, quadfit = True):
         mus[m] = mu
         gs[m]  = g
         """
-    pool   = Pool(processes=None)
+    pool   = Pool(processes=processes)
     mug    = pool.map(update_mus_gain_pix, args)
     mus    = np.array([m[0] for m in mug])
     gs     = np.array([g[1] for g in mug])
@@ -806,7 +806,7 @@ def update_mus_gain_pix((hms, fms, quadfit)):
     return mu, g
 
 
-def update_counts(d):
+def update_counts(d, processes=1):
     """
     """
     M   = d['histograms'].shape[0]
@@ -817,7 +817,7 @@ def update_counts(d):
     update_counts_pix = update_counts_brute2
     args = [(d['histograms'][m], Xv, d['counts']['value'][:, m], gs[m], mus[m]) for m in range(M)]
     
-    pool   = Pool(processes=None)
+    pool   = Pool(processes=processes)
     Nv_out = np.array(pool.map(update_counts_brute2_pool, args)).T
 
 

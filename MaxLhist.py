@@ -6,6 +6,8 @@ from scipy.ndimage import gaussian_filter1d
 import sys
 import copy
 
+processes = 1
+
 def process_input(datas):
     """
     """
@@ -153,9 +155,9 @@ def process_input(datas):
     return offsets, gains, vars, datas
 
 
-def refine(datas, iterations=1):
+def refine(datas, iterations=1, processes = 1):
     offsets, gains, vars, datas = process_input(datas)
-    
+
     # update the guess
     #-----------------
     errors = []
@@ -163,7 +165,7 @@ def refine(datas, iterations=1):
     gains_temp     = copy.deepcopy(gains)
     vars_temp      = copy.deepcopy(vars)
     
-    e   = ut.log_likelihood_calc_many(datas)
+    e   = ut.log_likelihood_calc_many(datas, processes = processes)
     errors.append(e)
     print 0, 'log likelihood error:', e
     
@@ -174,7 +176,7 @@ def refine(datas, iterations=1):
                 # grab all the data that has this gain
                 ds              = [d for d in datas if gains[j] is d['gain']]
                 print 'updating the offset and gain of: ', [d['name'] for d in ds]
-                offsets_temp[j]['value'], gains_temp[j]['value'] = ut.update_mus_gain(ds) 
+                offsets_temp[j]['value'], gains_temp[j]['value'] = ut.update_mus_gain(ds, processes = processes) 
                 
         # now check if there are any offsets without gain updates
         for j in range(len(offsets_temp)):
@@ -187,7 +189,7 @@ def refine(datas, iterations=1):
         
         # new functions 
         print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
-        Xv = ut.update_fs_new(vars, datas)
+        Xv = ut.update_fs_new(vars, datas, processes = processes)
 
         for v in range(len(vars)):
             vars_temp[v]['function']['value'] = Xv[v]
@@ -197,7 +199,7 @@ def refine(datas, iterations=1):
         counts_temp    = []
         for d in datas:
             if d['counts']['update']: 
-                counts = ut.update_counts(d)
+                counts = ut.update_counts(d, processes = processes)
             else :
                 counts = d['counts']
             counts_temp.append(counts)
@@ -230,7 +232,7 @@ def refine(datas, iterations=1):
         counts_temp    = []
         for d in datas:
             if d['counts']['update']: 
-                counts = ut.update_counts(d)
+                counts = ut.update_counts(d, processes = processes)
             else :
                 counts = d['counts']
             counts_temp.append(counts)
@@ -239,7 +241,7 @@ def refine(datas, iterations=1):
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
 
         
-        e   = ut.log_likelihood_calc_many(datas)
+        e   = ut.log_likelihood_calc_many(datas, processes = processes )
         errors.append(e)
         print i+1, 'log likelihood error:', e
 
@@ -296,7 +298,7 @@ class Result():
 
         f.close()
     
-    def show_fit(self, dataname, hists):
+    def show_fit(self, dataname, hists, processes = 1):
         errors   = self.result['error vs iter']
         p_errors = self.result[dataname]['pix_errors']
         
@@ -316,7 +318,7 @@ class Result():
         hists1 = fm.forward_hists_nvar(fs, mus, gs, counts)
 
         # get the sum of the unshifted and ungained histograms
-        hist_proj    = np.sum(ut.ungain_unshift_hist(hists, mus, gs), axis=0)
+        hist_proj    = np.sum(ut.ungain_unshift_hist(hists, mus, gs, processes), axis=0)
         total_counts = np.sum(hist_proj)
         hist_proj    = hist_proj / total_counts
          
