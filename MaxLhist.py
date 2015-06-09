@@ -220,6 +220,7 @@ def refine(datas, iterations=1, processes = 1):
             if datas[j]['counts']['update']: 
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
 
+        """
         #----------------------------
         Xv = ut.minimise_overlap(vars)
         for v in range(len(vars)):
@@ -238,7 +239,8 @@ def refine(datas, iterations=1, processes = 1):
         for j in range(len(datas)):
             if datas[j]['counts']['update']: 
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
-
+        #----------------------------
+        """
         
         e   = ut.log_likelihood_calc_many(datas, processes = processes )
         errors.append(e)

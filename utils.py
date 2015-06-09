@@ -210,6 +210,8 @@ def log_likelihood_calc_many(datas, prob_tol = 1.0e-10, processes = 1):
             
         pool  = Pool(processes=processes)
         errors = pool.map(log_likelihood_calc_many_pool, args)
+        pool.close()
+        pool.join()
         error  = -np.sum(errors)
     return error
 
@@ -485,6 +487,8 @@ def ungain_unshift_hist(hists, mus, gs, processes = 1):
     args     = [(hists[m], mus[m], gs[m]) for m in range(hists.shape[0])]
     pool     = Pool(processes=processes)
     hist_adj = np.array(pool.map(ungain_unshift_hist_pool, args))
+    pool.close()
+    pool.join()
     return hist_adj
 
 def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj, ns, bounds)):
@@ -512,6 +516,8 @@ def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bou
 
     pool   = Pool(processes=processes)
     Xs     = pool.map(update_Xs_pool, args)
+    pool.close()
+    pool.join()
     X      = np.array(Xs).T
 
     return X
@@ -689,9 +695,11 @@ def update_mus_gain(ds, normalise = True, quadfit = True, processes = 1):
         gs[m]  = g
         """
     pool   = Pool(processes=processes)
-    mug    = pool.map(update_mus_gain_pix, args)
-    mus    = np.array([m[0] for m in mug])
-    gs     = np.array([g[1] for g in mug])
+    mug    = np.array(pool.map(update_mus_gain_pix, args))
+    pool.close()
+    pool.join()
+    mus    = mug[:, 0]
+    gs     = mug[:, 1]
     
     if normalise :
         mus = mus - np.sum(mus)/float(len(mus))
@@ -819,6 +827,8 @@ def update_counts(d, processes=1):
     
     pool   = Pool(processes=processes)
     Nv_out = np.array(pool.map(update_counts_brute2_pool, args)).T
+    pool.close()
+    pool.join()
 
 
 

@@ -72,6 +72,8 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
 
     pool  = Pool(processes=processes)
     hists = pool.map(generate_hist_pix, args)
+    pool.close()
+    pool.join()
     hists = np.array(hists)
 
     """
