@@ -6,10 +6,10 @@ import numpy as np
 import utils as ut
 import scipy
 
-processes = 20
+processes = 4
 
 # test data
-M = 10000
+M = 1000
 N = 2000
 
 
@@ -99,11 +99,11 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=5, processes = processes)
+result = MaxLhist.refine([data2, data], iterations=1, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)
-print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
+#print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
 print 'rms      mus    :' , np.sqrt( np.mean( (mus - result.result['run']['offset'])**2 ) )
 
 

@@ -491,11 +491,9 @@ def ungain_unshift_hist(hists, mus, gs, processes = 1):
     pool.join()
     return hist_adj
 
-def update_Xs_pool((hj_0, total_counts, total_counts_v_0, update_vs, nupdate_vs, Xj, ns, bounds, j)):
-    hj             = hj_0 / np.sqrt(float(total_counts))
-    total_counts_v = total_counts_v_0 / np.sqrt(float(total_counts))
-    thresh         = 1. / np.sqrt(float(total_counts))
-    ms  = np.where(hj>thresh)
+def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj, ns, bounds, j)):
+    thresh         = 1. 
+    ms  = np.where(hj>thresh)[0]
     if np.sum(hj) > 1 :
         def fun_graderror(Xvs):
             fj    = np.sum(ns[update_vs, :].T * Xvs, axis=-1)
@@ -508,8 +506,10 @@ def update_Xs_pool((hj_0, total_counts, total_counts_v_0, update_vs, nupdate_vs,
         Xvs_0 = Xj[update_vs]
         res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
                 ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
-        if j > 121 and j < 140 :
+        if not res.success :
             res['j'] = j
+            res['sum hj'] = np.sum(hj)
+            res['len ms'] = len(ms)
             print res, '\n\n'
         Xj[update_vs] = res.x
     else :
