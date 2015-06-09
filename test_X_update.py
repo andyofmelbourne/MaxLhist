@@ -40,18 +40,21 @@ background = {
         'name'      : 'electronic noise',
         'type'      : 'random variable',
         'function'  : {'update': True, 'value' : b},
+        #'function'  : {'update': False, 'value' : Xv[0]},
         }
 
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
         'function'  : {'update': True, 'value' : s},
+        #'function'  : {'update': False, 'value' : Xv[1]},
         }
 
 dPhoton = {
         'name'      : 'double photon',
         'type'      : 'random variable',
         'function'  : {'update': True, 'value' : d},
+        #'function'  : {'update': False, 'value' : Xv[2]},
         }
 
 # data
@@ -61,7 +64,7 @@ data2 = {
         'histograms' : hists2,
         'vars'       : [background], 
         'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': True, 'value' : np.ones_like(gs)},
+        'gain'       : {'update': False, 'value' : gs},
         'comment'    : 'testing the X update'
         }
 
@@ -77,7 +80,7 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=3)
+result = MaxLhist.refine([data2, data], iterations=1)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)

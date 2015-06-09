@@ -4,6 +4,7 @@ import forward_model as fm
 import utils as ut
 from scipy.ndimage import gaussian_filter1d
 import sys
+import copy
 
 def process_input(datas):
     """
@@ -158,9 +159,9 @@ def refine(datas, iterations=1):
     # update the guess
     #-----------------
     errors = []
-    offsets_temp   = list(offsets)
-    gains_temp     = list(gains)
-    vars_temp      = list(vars)
+    offsets_temp   = copy.deepcopy(offsets)
+    gains_temp     = copy.deepcopy(gains)
+    vars_temp      = copy.deepcopy(vars)
     
     e   = ut.log_likelihood_calc_many(datas)
     errors.append(e)
@@ -187,10 +188,10 @@ def refine(datas, iterations=1):
         # new functions 
         print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
         Xv = ut.update_fs_new(vars, datas)
-            
+
         for v in range(len(vars)):
             vars_temp[v]['function']['value'] = Xv[v]
-        
+
         # new counts 
         print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
         counts_temp    = []
@@ -198,7 +199,7 @@ def refine(datas, iterations=1):
             if d['counts']['update']: 
                 counts = ut.update_counts(d)
             else :
-                counts = d['counts']['update']
+                counts = d['counts']
             counts_temp.append(counts)
         
         # update the current guess
@@ -218,7 +219,6 @@ def refine(datas, iterations=1):
             if datas[j]['counts']['update']: 
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
 
-        # minimise overlap on the X's
         #----------------------------
         Xv = ut.minimise_overlap(vars)
         for v in range(len(vars)):
@@ -232,11 +232,12 @@ def refine(datas, iterations=1):
             if d['counts']['update']: 
                 counts = ut.update_counts(d)
             else :
-                counts = d['counts']['update']
+                counts = d['counts']
             counts_temp.append(counts)
         for j in range(len(datas)):
             if datas[j]['counts']['update']: 
                 datas[j]['counts']['value'] = np.array(counts_temp[j])
+
         
         e   = ut.log_likelihood_calc_many(datas)
         errors.append(e)
