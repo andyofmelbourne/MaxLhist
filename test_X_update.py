@@ -66,7 +66,7 @@ data2 = {
         'histograms' : hists2,
         'vars'       : [background], 
         'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': False, 'value' : gs},
+        'gain'       : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
@@ -82,7 +82,7 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=10, processes = processes)
+result = MaxLhist.refine([data2, data], iterations=3, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)

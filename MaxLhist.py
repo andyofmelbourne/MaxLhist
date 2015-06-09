@@ -6,7 +6,6 @@ from scipy.ndimage import gaussian_filter1d
 import sys
 import copy
 
-processes = 1
 
 def process_input(datas):
     """

@@ -483,7 +483,7 @@ def ungain_unshift_hist_pool((hist_m, mu_m, g_m)):
 
 def ungain_unshift_hist(hists, mus, gs, processes = 1):
     args     = [(hists[m], mus[m], gs[m]) for m in range(hists.shape[0])]
-    pool     = Pool(processes=None)
+    pool     = Pool(processes=processes)
     hist_adj = np.array(pool.map(ungain_unshift_hist_pool, args))
     return hist_adj
 
@@ -507,10 +507,10 @@ def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj,
     return Xj
 
 
-def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X):
+def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X, processes = 1):
     args = [(hist[:, j], total_counts, total_counts_v, update_vs, nupdate_vs, X[:, j], ns, bounds) for j in range(hist.shape[-1])]
 
-    pool   = Pool(processes=None)
+    pool   = Pool(processes=processes)
     Xs     = pool.map(update_Xs_pool, args)
     X      = np.array(Xs).T
 
@@ -539,7 +539,7 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
         if d == 0 :
             hist = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'], processes = processes)
         else : 
-            hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'])), processes = processes)
+            hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'], processes = processes)))
         
         # fill the counts for datas vars
         for v in range(V):
@@ -554,7 +554,7 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
     ns             = counts / np.sum(hist, axis=-1)
 
     # update the guess
-    X = update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X)
+    X = update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X, processes = processes)
     
     # positivity
     X[np.where(X<0)] = 0
