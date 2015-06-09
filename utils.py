@@ -491,9 +491,12 @@ def ungain_unshift_hist(hists, mus, gs, processes = 1):
     pool.join()
     return hist_adj
 
-def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj, ns, bounds)):
-    ms     = np.where(hj*total_counts>1)
-    if np.sum(hj[ms]*total_counts) > 0 :
+def update_Xs_pool((hj_0, total_counts, total_counts_v_0, update_vs, nupdate_vs, Xj, ns, bounds, j)):
+    hj             = hj_0 / np.sqrt(float(total_counts))
+    total_counts_v = total_counts_v_0 / np.sqrt(float(total_counts))
+    thresh         = 1. / np.sqrt(float(total_counts))
+    ms  = np.where(hj>thresh)
+    if np.sum(hj) > 1 :
         def fun_graderror(Xvs):
             fj    = np.sum(ns[update_vs, :].T * Xvs, axis=-1)
             fj   += np.sum(ns[nupdate_vs, :].T * Xj[nupdate_vs], axis=-1)
@@ -505,6 +508,9 @@ def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj,
         Xvs_0 = Xj[update_vs]
         res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
                 ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
+        if j > 121 and j < 140 :
+            res['j'] = j
+            print res, '\n\n'
         Xj[update_vs] = res.x
     else :
         Xj[update_vs] = 0.0
@@ -512,7 +518,7 @@ def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj,
 
 
 def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X, processes = 1):
-    args = [(hist[:, j], total_counts, total_counts_v, update_vs, nupdate_vs, X[:, j], ns, bounds) for j in range(hist.shape[-1])]
+    args = [(hist[:, j], total_counts, total_counts_v, update_vs, nupdate_vs, X[:, j], ns, bounds, j) for j in range(hist.shape[-1])]
 
     pool   = Pool(processes=processes)
     Xs     = pool.map(update_Xs_pool, args)

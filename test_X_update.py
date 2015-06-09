@@ -6,15 +6,38 @@ import numpy as np
 import utils as ut
 import scipy
 
-processes = 10
+processes = 20
 
 # test data
-M = 1000
+M = 10000
 N = 2000
 
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], pos = [100, 120, 150], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None, processes = processes)
+
+# 3 random variables
+#-------------------
+"""
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [5., 7., 9.], \
+                                                pos = [100, 120, 150], sigma_mu = 0., sigma_g = 0.0, \
+                                                mus=None, ns=None, gs=None, processes = processes)
+"""
+
+# 2 random variables
+#-------------------
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=2, sigmas = [5., 7.], \
+                                                pos = [100, 120], sigma_mu = 0., sigma_g = 0.0, \
+                                                mus=None, ns=None, gs=None, processes = processes)
+
+
 counts = ns * np.sum(hists, axis=1)
 
+
+hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], \
+                                                     pos = [100], sigma_mu = 0., sigma_g = 0.0, \
+                                                     mus=mus, ns=None, gs=gs, processes = processes)
+
+
+
+# initial guess
 I = 250
 i      = np.arange(0, I, 1)
 f = np.exp( - (i - 100.).astype(np.float64)**2 / (2. * 20.) )
@@ -29,12 +52,6 @@ f = np.exp( - (i - 150.).astype(np.float64)**2 / (2. * 20.) )
 f = f / np.sum(f)
 d = f.copy()
 
-"""
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=1000, N=1000, V=2, sigmas = [5., 7.], pos = [100, 120], sigma_mu = 10., sigma_g = 0.1, mus=None, ns=None, gs=None)
-counts = ns * np.sum(hists, axis=1)
-"""
-
-hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], pos = [100], sigma_mu = 0., sigma_g = 0.0, mus=mus, ns=None, gs=gs, processes = processes)
 
 # Random variables
 #-----------------
@@ -65,28 +82,29 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': True, 'value' : None},
+        'offset'     : {'update': False, 'value' : mus},
+        'gain'       : {'update': False, 'value' : gs},
         'comment'    : 'testing the X update'
         }
 
 data = {
         'name'       : 'run',
         'histograms' : hists,
-        'vars'       : [background, sPhoton, dPhoton], 
+        'vars'       : [background, sPhoton], 
         'offset'     : data2['offset'],
         'gain'       : data2['gain'],
-        'counts'     : {'update': True, 'value' : None},
+        'counts'     : {'update': False, 'value' : counts},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=3, processes = processes)
+result = MaxLhist.refine([data2, data], iterations=5, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)
 print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
+print 'rms      mus    :' , np.sqrt( np.mean( (mus - result.result['run']['offset'])**2 ) )
 
 
 result.show_fit('run', hists)
