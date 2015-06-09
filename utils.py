@@ -476,12 +476,45 @@ def update_fs_many(var, ds):
     X = X / np.sum(X)
     return X
 
-def ungain_unshift_hist(hists, mus, gs):
-    hist_adj = np.zeros_like(hists, dtype=np.float64)
-    for m in range(hists.shape[0]):
-        hist_adj[m] = roll_real(hists[m].astype(np.float64), -mus[m])
-        hist_adj[m] = gain(hist_adj[m], 1. / gs[m]) #/ total_counts
+def ungain_unshift_hist_pool((hist_m, mu_m, g_m)):
+    hist_adj = roll_real(hist_m.astype(np.float64), -mu_m)
+    hist_adj = gain(hist_adj, 1. / g_m) 
     return hist_adj
+
+def ungain_unshift_hist(hists, mus, gs):
+    args     = [(hists[m], mus[m], gs[m]) for m in range(hists.shape[0])]
+    pool     = Pool(processes=None)
+    hist_adj = np.array(pool.map(ungain_unshift_hist_pool, args))
+    return hist_adj
+
+def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj, ns, bounds)):
+    ms     = np.where(hj*total_counts>1)
+    if np.sum(hj[ms]*total_counts) > 0 :
+        def fun_graderror(Xvs):
+            fj    = np.sum(ns[update_vs, :].T * Xvs, axis=-1)
+            fj   += np.sum(ns[nupdate_vs, :].T * Xj[nupdate_vs], axis=-1)
+            error = 0.0
+            for v in range(len(Xvs)):
+                error += (total_counts_v[v] - np.sum(ns[v][ms] * hj[ms] / (fj[ms]+1.0e-10)))**2
+            return error
+        
+        Xvs_0 = Xj[update_vs]
+        res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
+                ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
+        Xj[update_vs] = res.x
+    else :
+        Xj[update_vs] = 0.0
+    return Xj
+
+
+def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X):
+    args = [(hist[:, j], total_counts, total_counts_v, update_vs, nupdate_vs, X[:, j], ns, bounds) for j in range(hist.shape[-1])]
+
+    pool   = Pool(processes=None)
+    Xs     = pool.map(update_Xs_pool, args)
+    X      = np.array(Xs).T
+
+    return X
 
 def update_fs_new(vars, datas, normalise = True):
     # join the histograms and counts into a big histogram thing
@@ -500,13 +533,11 @@ def update_fs_new(vars, datas, normalise = True):
         bounds.append( (0.0, 1.0) )
 
     if len(update_vs) == 0 :
-        for v in range(V):
-            X[v, :] = vars[v]['function']['value']
         return X
     
     for d in range(0, D):
         if d == 0 :
-            hist   = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'])
+            hist = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'])
         else : 
             hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'])))
         
@@ -521,37 +552,20 @@ def update_fs_new(vars, datas, normalise = True):
     total_counts_v = np.sum(counts, axis=-1)
     total_counts   = np.sum(total_counts_v)
     ns             = counts / np.sum(hist, axis=-1)
-    
-    for j in range(hist.shape[-1]):
-        hj     = hist[:, j] 
-        ms     = np.where(hj*total_counts>1)
-        Xj     = X[nupdate_vs, j]
-        if np.sum(hj[ms]*total_counts) > 0 :
-            def fun_graderror(Xvs):
-                fj    = np.sum(ns[update_vs, :].T * Xvs, axis=-1)
-                fj   += np.sum(ns[nupdate_vs, :].T * Xj, axis=-1)
-                error = 0.0
-                for v in range(len(Xvs)):
-                    error += (total_counts_v[v] - np.sum(ns[v][ms] * hj[ms] / (fj[ms]+1.0e-10)))**2
-                return error
-            
-            Xvs_0 = X[update_vs, j]
-            res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
-                    ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
-            res['pixel'] = j
-            #print 'optimising adu value:', j, res.fun
-            X[update_vs, j] = res.x
-        else :
-            X[update_vs, j] = res.x
 
+    # update the guess
+    X = update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X)
+    
     # positivity
     X[np.where(X<0)] = 0
     
+    # smoothness
     for v in range(V):
         if vars[v].has_key('smooth'):
             if vars[v]['smooth'] > 0 :
                 X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
     
+    # normalise
     if normalise :
         for v in range(V):
             X[v, :] = X[v, :] / np.sum(X[v, :])
@@ -798,25 +812,29 @@ def update_counts(d):
     M   = d['histograms'].shape[0]
     mus = d['offset']['value']
     gs  = d['gain']['value']
-    Nv_out = np.zeros_like(d['counts']['value'])
+    Xv  = [var['function']['value'] for var in d['vars']]
+
+    update_counts_pix = update_counts_brute2
+    args = [(d['histograms'][m], Xv, d['counts']['value'][:, m], gs[m], mus[m]) for m in range(M)]
+    
+    pool   = Pool(processes=None)
+    Nv_out = np.array(pool.map(update_counts_brute2_pool, args)).T
+
+
 
     """
-    if Nv_out.shape[0] % 2 == 0 : # even
-        update_counts_pix = update_counts_pix_even_V
-    else :
-        update_counts_pix = update_counts_pix_odd_V
-    """
-    update_counts_pix = update_counts_brute2
-    
     for m in range(M):
-        Xv = [var['function']['value'] for var in d['vars']]
         h  = d['histograms'][m]
-        N  = np.sum(h)
         Nv = d['counts']['value'][:, m] 
         
         Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m]) 
     
+    """
     return Nv_out
+
+def update_counts_brute2_pool((h, Xv, Nv, g, mu)):
+    Nv_out_m = update_counts_brute2(h, Xv, Nv, g, mu)
+    return Nv_out_m 
     
 def update_counts_brute2(h, Xv, Nv, g, mu):
     hgm = roll_real(h, -mu)
