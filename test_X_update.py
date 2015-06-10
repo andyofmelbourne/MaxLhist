@@ -9,8 +9,8 @@ import scipy
 processes = 4
 
 # test data
-M = 1000
-N = 2000
+M = 3000
+N = 3000
 
 
 # 3 random variables
@@ -99,15 +99,108 @@ data = {
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data], iterations=1, processes = processes)
+result = MaxLhist.refine([data2, data], iterations=1, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)
 #print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
 print 'rms      mus    :' , np.sqrt( np.mean( (mus - result.result['run']['offset'])**2 ) )
-
+for v in result.vars :
+    for X in Xv :
+        print 'fidelity ', v['name'], ' Xv ', np.sum((v['function']['value'] - X)**2)/np.sum(X**2)
+    for X in [b,s] :
+        print 'init ', v['name'], ' Xv ', np.sum((v['function']['value'] - X)**2)/np.sum(X**2)
 
 result.show_fit('run', hists)
+
+"""
+datas = result.datas
+vars  = result.vars
+
+M = datas[0]['histograms'].shape[0]
+D = len(datas)
+V = len(vars)
+I = datas[0]['histograms'].shape[1]
+counts = np.zeros((V, M * D), dtype=np.float64)
+X      = np.zeros((V, I), dtype=np.float64)
+
+for d in range(0, D):
+    if d == 0 :
+        hist = ut.ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'], processes = processes)
+    else : 
+        hist = np.concatenate((hist, ut.ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'], processes = processes)))
+    
+    # fill the counts for datas vars
+    for v in range(V):
+        X[v, :] = vars[v]['function']['value']
+        #i = np.where([vars[v] is vt for vt in datas[d]['vars']])
+        i = [u for u in range(len(datas[d]['vars'])) if vars[v] is datas[d]['vars'][u]]
+        for j in i:
+            counts[j, d * M : (d+1) * M] = datas[d]['counts']['value'][v]
+
+
+ns             = counts / np.sum(hist, axis=-1)
+    
+
+Xv_out = np.zeros_like(Xv)
+for j in range(hist.shape[1]):
+    print j
+    ms = np.where(hist[:, j] > 0)[0]
+    if len(ms) > 0 :
+"""
+"""
+        gi = len(ms) * np.sum(hist[ms, j]) / np.sum(hist[ms])
+        N0 = np.sum(ns[0, ms])
+        N1 = np.sum(ns[1, ms])
+
+        bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+
+        def error(X1):
+            error = - np.sum( hist[ms, j] * np.log( ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+            return error
+
+        def grad_error(X1):
+            error = - np.sum( hist[ms, j] * (ns[1, ms] - ns[0, ms] * N1 / N0) / (ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+            return error
+
+        xs = np.arange(bounds_x1[0][0], bounds_x1[0][1], 0.001)
+        errors = np.array([error(x) for x in xs])
+        Xv_out[1, j] = xs[np.argmin(errors)]
+        Xv_out[0, j] = (gi - N1 * Xv_out[1, j]) / N0
+"""
+"""
+        gi = hist.shape[0] * np.sum(hist[:, j]) / np.sum(hist)
+        N0 = np.sum(ns[0, :])
+        N1 = np.sum(ns[1, :])
+
+        bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+
+        def error(X1):
+            error = - np.sum( hist[ms, j] * np.log( ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+            return error
+
+        def grad_error(X1):
+            error = - np.sum( hist[ms, j] * (ns[1, ms] - ns[0, ms] * N1 / N0) / (ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+            return error
+
+        xs = np.arange(bounds_x1[0][0], bounds_x1[0][1], 0.001)
+        errors = np.array([error(x) for x in xs])
+        Xv_out[1, j] = xs[np.argmin(errors)]
+        Xv_out[0, j] = (gi - N1 * Xv_out[1, j]) / N0
+
+"""
+
+
+"""
+print 'Xj god, Xj solved      :', Xv[0][j], Xv[1][j], Xj_out
+
+error_god = fun_graderror_test((hj, total_counts, counts_m, update_vs, nupdate_vs, np.array([Xv[0][j], Xv[1][j]]), ns, bounds, j))
+error_res = fun_graderror_test((hj, total_counts, counts_m, update_vs, nupdate_vs, Xj_out, ns, bounds, j))
+print 'Error Xj god, Xj solved, res:', error_god, error_res, res.fun
+"""
+
+
+
 """
 def update_counts_brute(h, Xv, Nv, g, mu):
     hgm = ut.roll_real(h, -mu)

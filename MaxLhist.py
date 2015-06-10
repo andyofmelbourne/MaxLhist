@@ -250,6 +250,9 @@ def refine(datas, iterations=1, processes = 1):
     errors = np.array(errors)
     
     result = Result(vars, datas, errors)
+    # temp
+    result.vars  = vars
+    result.datas = datas
     return result
 
 

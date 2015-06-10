@@ -491,8 +491,8 @@ def ungain_unshift_hist(hists, mus, gs, processes = 1):
     pool.join()
     return hist_adj
 
-def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj, ns, bounds, j)):
-    thresh         = 1. 
+def update_Xs_pool((hj, total_counts, counts_m, update_vs, nupdate_vs, Xj, ns, bounds, j)):
+    thresh         = 0. 
     ms  = np.where(hj>thresh)[0]
     if np.sum(hj) > 1 :
         def fun_graderror(Xvs):
@@ -500,31 +500,208 @@ def update_Xs_pool((hj, total_counts, total_counts_v, update_vs, nupdate_vs, Xj,
             fj   += np.sum(ns[nupdate_vs, :].T * Xj[nupdate_vs], axis=-1)
             error = 0.0
             for v in range(len(Xvs)):
-                error += (total_counts_v[v] - np.sum(ns[v][ms] * hj[ms] / (fj[ms]+1.0e-10)))**2
+                error += np.sum(ns[v][ms] * (counts_m[ms] - hj[ms] / (fj[ms]+1.0e-10)))**2
             return error
         
-        Xvs_0 = Xj[update_vs]
-        res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds\
-                ,options = {'gtol' : 1.0e-10, 'ftol' : 1.0e-10})
-        if not res.success :
-            res['j'] = j
-            res['sum hj'] = np.sum(hj)
-            res['len ms'] = len(ms)
-            print res, '\n\n'
+        Xvs_0 = np.zeros_like(Xj[update_vs])
+        res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds=bounds)
         Xj[update_vs] = res.x
     else :
         Xj[update_vs] = 0.0
     return Xj
 
+def update_Xs_pool_new((hj, total_counts, update_vs, nupdate_vs, Xj, ns, bounds, j)):
+    thresh         = 0. 
+    ms             = np.where(hj>thresh)[0]
+    v              = 0
+    u              = np.where(update_vs != v)[0]
+    nv             = ns[v, :]
+    nu             = ns[u, :]
+    Nv             = np.sum(nv, axis = -1)
+    Nu             = np.sum(nu, axis = -1)
+    gj             = np.sum(hj[:]) / total_counts * len(hj)
 
-def update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X, processes = 1):
-    args = [(hist[:, j], total_counts, total_counts_v, update_vs, nupdate_vs, X[:, j], ns, bounds, j) for j in range(hist.shape[-1])]
+    NNN_m = (Nu * nv / Nv - nu)
+
+    if np.sum(hj) > 1 :
+        def fun_graderror(Xvs):
+            fj    = nv * gj / Nv - np.sum(Xvs[:, np.newaxis] * NNN_m, axis=0)  
+            
+            error = 0.0
+            for v in range(len(Xvs)):
+                error += np.sum(hj[ms] / (fj[ms]+1.0e-10) * NNN_m[v][ms] )**2
+            return error
+        
+        Xvs_0 = Xj[u]
+        
+        bounds = [( (gj-Nv)/Nu, 1.)]
+        x_min = np.max( [ (gj - Nv)/Nu, 0 ] )
+        x_max = np.min( [ gj/Nu, 1 ] )
+        bounds = [ (x_min, x_max) ]
+        res   = scipy.optimize.minimize(fun_graderror, Xvs_0, method='L-BFGS-B', bounds = bounds)
+        #
+        Xj[v] = gj / Nv - np.sum(res.x[:, np.newaxis] * Nu / Nv, axis=0)  
+        Xj[u] = res.x
+
+        # check sol
+        if not np.allclose(np.sum(Xj[:, np.newaxis] * ns, axis=0) , gj):
+            print 'warning: solution does not satisfy constraints', Xj, bounds, j
+    else :
+        Xj[update_vs] = 0.0
+    return Xj
+
+def update_Xs_pool_2((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
+    if len(update_vs) == 2 :
+        ms = np.where(hj > 0)[0]
+        if len(ms) > 0 :
+            gi = len(hj) * np.sum(hj) / float(total_counts)
+            N0 = np.sum(ns[0, :])
+            N1 = np.sum(ns[1, :])
+            
+            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+            
+            def error(X1):
+                error = - np.sum( hj[ms] * np.log( ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+                return error
+            
+            def grad_error(X1):
+                error = - np.sum( hj[ms] * (ns[1, ms] - ns[0, ms] * N1 / N0) / (ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+                return error
+            
+            Xv_out       = np.zeros_like(Xj)
+            # try zooming
+            xs, retstep  = np.linspace(bounds_x1[0][0], bounds_x1[0][1], 50, endpoint = True, retstep=True)
+            errors       = np.array([error(x) for x in xs])
+            x1           = xs[np.argmin(errors)]
+            # once again
+            xs, retstep  = np.linspace(np.max([bounds_x1[0][0], x1-retstep]) , np.min([bounds_x1[0][1], x1+retstep]), 50, endpoint = True, retstep=True)
+            errors       = np.array([error(x) for x in xs])
+            x1           = xs[np.argmin(errors)]
+
+            Xv_out[1]    = x1 
+            Xv_out[0]    = (gi - N1 * x1) / N0
+            return Xv_out
+        else : 
+            return np.zeros_like(Xj)
+    
+    if len(update_vs) == 1 :
+        ms = np.where(hj > 0)[0]
+        if len(ms) > 0 :
+            gi = len(hj) * np.sum(hj) / float(total_counts)
+            N0 = np.sum(ns[update_vs[0], :])
+            N1 = np.sum(ns[nupdate_vs[0], :])
+            
+            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+            bounds_x0 = [( np.max( [0, (gi-N1)/N0] ) , np.min( [1, gi/N0] ) )] 
+            
+            Xv_out       = np.zeros_like(Xj)
+            
+            x0 = (gi - N1 * Xj[nupdate_vs[0]]) / N0
+            
+            if x0 > bounds_x0[0][1] :
+                Xv_out[update_vs[0]] = bounds_x0[0][1]
+            elif x0 < bounds_x0[0][0] :
+                Xv_out[update_vs[0]] = bounds_x0[0][0]
+            else :
+                Xv_out[update_vs[0]] = x0
+        else :
+            return np.zeros_like(Xj)
+        
+        return Xv_out
+
+def update_Xs_pool_N((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
+    if len(update_vs) == 2 :
+        ms = np.where(hj > 0)[0]
+        if len(ms) > 0 :
+            gi = len(hj) * np.sum(hj) / float(total_counts)
+            N0 = np.sum(ns[0, :])
+            N1 = np.sum(ns[1, :])
+            
+            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+            
+            def error(X1):
+                error = - np.sum( hj[ms] * np.log( ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+                return error
+            
+            def grad_error(X1):
+                error = - np.sum( hj[ms] * (ns[1, ms] - ns[0, ms] * N1 / N0) / (ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
+                return error
+            
+            Xv_out       = np.zeros_like(Xj)
+            # try zooming
+            xs, retstep  = np.linspace(bounds_x1[0][0], bounds_x1[0][1], 50, endpoint = True, retstep=True)
+            errors       = np.array([error(x) for x in xs])
+            x1           = xs[np.argmin(errors)]
+            # once again
+            xs, retstep  = np.linspace(np.max([bounds_x1[0][0], x1-retstep]) , np.min([bounds_x1[0][1], x1+retstep]), 50, endpoint = True, retstep=True)
+            errors       = np.array([error(x) for x in xs])
+            x1           = xs[np.argmin(errors)]
+
+            Xv_out[1]    = x1 
+            Xv_out[0]    = (gi - N1 * x1) / N0
+            return Xv_out
+        else : 
+            return np.zeros_like(Xj)
+    
+    if len(update_vs) == 1 :
+        ms = np.where(hj > 0)[0]
+        if len(ms) > 0 :
+            gi = len(hj) * np.sum(hj) / float(total_counts)
+            N0 = np.sum(ns[update_vs[0], :])
+            N1 = np.sum(ns[nupdate_vs[0], :])
+            
+            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
+            bounds_x0 = [( np.max( [0, (gi-N1)/N0] ) , np.min( [1, gi/N0] ) )] 
+            
+            Xv_out       = np.zeros_like(Xj)
+            
+            x0 = (gi - N1 * Xj[nupdate_vs[0]]) / N0
+            
+            if x0 > bounds_x0[0][1] :
+                Xv_out[update_vs[0]] = bounds_x0[0][1]
+            elif x0 < bounds_x0[0][0] :
+                Xv_out[update_vs[0]] = bounds_x0[0][0]
+            else :
+                Xv_out[update_vs[0]] = x0
+        else :
+            return np.zeros_like(Xj)
+        
+        return Xv_out
+
+def update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X, processes = 1):
+    # if we have one random variable then this is easy:
+    if X.shape[0] == 1 :
+        if len(update_vs) == 1 :
+            X[0] = np.sum(hist, axis=0) / float(total_counts)
+        return X
+    
+    if X.shape[0] == 2 :
+        args = [(hist[:, j], total_counts, update_vs, nupdate_vs, X[:, j], ns, j) for j in range(hist.shape[-1])]
+        Xs = []
+        for arg in args :
+            Xs.append( update_Xs_pool_2(arg))
+        
+        X      = np.array(Xs).T
+    """
+    args = [(hist[:, j], total_counts, counts_m, update_vs, nupdate_vs, X[:, j], ns, bounds, j) for j in range(hist.shape[-1])]
 
     pool   = Pool(processes=processes)
     Xs     = pool.map(update_Xs_pool, args)
     pool.close()
     pool.join()
     X      = np.array(Xs).T
+    args = [(hist[:, j], total_counts, update_vs, nupdate_vs, X[:, j], ns, bounds, j) for j in range(hist.shape[-1])]
+
+    #pool   = Pool(processes=processes)
+    #Xs     = pool.map(update_Xs_pool_new, args)
+    #pool.close()
+    #pool.join()
+    Xs = []
+    for arg in args :
+        Xs.append( update_Xs_pool_new(arg))
+    
+    X      = np.array(Xs).T
+    """
 
     return X
 
@@ -556,31 +733,33 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
         # fill the counts for datas vars
         for v in range(V):
             X[v, :] = vars[v]['function']['value']
-            i = np.where([vars[v] is vt for vt in datas[d]['vars']])
-            if i[0].shape[0] > 0 :
-                i = i[0][0]
-                counts[i, d * M : (d+1) * M] = datas[d]['counts']['value'][v]
+            i = [u for u in range(len(datas[d]['vars'])) if vars[v] is datas[d]['vars'][u]]
+            for j in i:
+                counts[j, d * M : (d+1) * M] = datas[d]['counts']['value'][v]
 
-    total_counts_v = np.sum(counts, axis=-1)
-    total_counts   = np.sum(total_counts_v)
+    counts_m       = np.sum(counts, axis=0)
+    total_counts   = np.sum(counts_m)
     ns             = counts / np.sum(hist, axis=-1)
 
     # update the guess
-    X = update_Xs(hist, total_counts, total_counts_v, update_vs, nupdate_vs, ns, bounds, X, processes = processes)
+    X = update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X, processes = processes)
     
     # positivity
-    X[np.where(X<0)] = 0
+    #X[np.where(X<0)] = 0
     
     # smoothness
     for v in range(V):
         if vars[v].has_key('smooth'):
             if vars[v]['smooth'] > 0 :
+                print 'smoothing ', vars[v]['name'], 'by', vars[v]['smooth']
                 X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
     
     # normalise
+    """
     if normalise :
         for v in range(V):
             X[v, :] = X[v, :] / np.sum(X[v, :])
+    """
     return X
 
 
