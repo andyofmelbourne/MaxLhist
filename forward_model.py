@@ -41,7 +41,7 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     
     # counts: I will make all but the first X have a maximum count rate of 0.2
     # the probability function for the number of photons
-    Nm = scipy.stats.uniform(loc = 0, scale = 0.2)
+    Nm = scipy.stats.uniform(loc = 0, scale = 0.02)
 
     # the probability function for the offsets or "dark values"
     MUm = scipy.stats.norm(loc = 0.0, scale = sigma_mu)

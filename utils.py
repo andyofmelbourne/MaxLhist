@@ -609,64 +609,6 @@ def update_Xs_pool_2((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
         
         return Xv_out
 
-def update_Xs_pool_N((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
-    if len(update_vs) == 2 :
-        ms = np.where(hj > 0)[0]
-        if len(ms) > 0 :
-            gi = len(hj) * np.sum(hj) / float(total_counts)
-            N0 = np.sum(ns[0, :])
-            N1 = np.sum(ns[1, :])
-            
-            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
-            
-            def error(X1):
-                error = - np.sum( hj[ms] * np.log( ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
-                return error
-            
-            def grad_error(X1):
-                error = - np.sum( hj[ms] * (ns[1, ms] - ns[0, ms] * N1 / N0) / (ns[0, ms] * gi / N0 + X1 * (ns[1, ms] - ns[0, ms] * N1 / N0) + 1.0e-10) )
-                return error
-            
-            Xv_out       = np.zeros_like(Xj)
-            # try zooming
-            xs, retstep  = np.linspace(bounds_x1[0][0], bounds_x1[0][1], 50, endpoint = True, retstep=True)
-            errors       = np.array([error(x) for x in xs])
-            x1           = xs[np.argmin(errors)]
-            # once again
-            xs, retstep  = np.linspace(np.max([bounds_x1[0][0], x1-retstep]) , np.min([bounds_x1[0][1], x1+retstep]), 50, endpoint = True, retstep=True)
-            errors       = np.array([error(x) for x in xs])
-            x1           = xs[np.argmin(errors)]
-
-            Xv_out[1]    = x1 
-            Xv_out[0]    = (gi - N1 * x1) / N0
-            return Xv_out
-        else : 
-            return np.zeros_like(Xj)
-    
-    if len(update_vs) == 1 :
-        ms = np.where(hj > 0)[0]
-        if len(ms) > 0 :
-            gi = len(hj) * np.sum(hj) / float(total_counts)
-            N0 = np.sum(ns[update_vs[0], :])
-            N1 = np.sum(ns[nupdate_vs[0], :])
-            
-            bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
-            bounds_x0 = [( np.max( [0, (gi-N1)/N0] ) , np.min( [1, gi/N0] ) )] 
-            
-            Xv_out       = np.zeros_like(Xj)
-            
-            x0 = (gi - N1 * Xj[nupdate_vs[0]]) / N0
-            
-            if x0 > bounds_x0[0][1] :
-                Xv_out[update_vs[0]] = bounds_x0[0][1]
-            elif x0 < bounds_x0[0][0] :
-                Xv_out[update_vs[0]] = bounds_x0[0][0]
-            else :
-                Xv_out[update_vs[0]] = x0
-        else :
-            return np.zeros_like(Xj)
-        
-        return Xv_out
 
 def update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X, processes = 1):
     # if we have one random variable then this is easy:
@@ -677,10 +619,13 @@ def update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X
     
     if X.shape[0] == 2 :
         args = [(hist[:, j], total_counts, update_vs, nupdate_vs, X[:, j], ns, j) for j in range(hist.shape[-1])]
-        Xs = []
-        for arg in args :
-            Xs.append( update_Xs_pool_2(arg))
-        
+        #Xs = []
+        #for arg in args :
+        #    Xs.append( update_Xs_pool_2(arg))
+        pool   = Pool(processes=processes)
+        Xs     = pool.map(update_Xs_pool_2, args)
+        pool.close()
+        pool.join()
         X      = np.array(Xs).T
     """
     args = [(hist[:, j], total_counts, counts_m, update_vs, nupdate_vs, X[:, j], ns, bounds, j) for j in range(hist.shape[-1])]
@@ -745,7 +690,7 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
     X = update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X, processes = processes)
     
     # positivity
-    #X[np.where(X<0)] = 0
+    X[np.where(X<0)] = 0
     
     # smoothness
     for v in range(V):
@@ -755,11 +700,9 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
                 X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
     
     # normalise
-    """
     if normalise :
         for v in range(V):
             X[v, :] = X[v, :] / np.sum(X[v, :])
-    """
     return X
 
 
@@ -1154,7 +1097,7 @@ def update_counts_pix_even_V(h, Xv, Nv, g, mu):
     return Nv_out
 
 
-def minimise_overlap(vars, iters = 10, neg_tol = 0.001):
+def minimise_overlap(vars, iters = 10, neg_tol = 0.0001):
     """
     recursively subtract X's from the others while keeping X positive
     by 'positive' we mean np.sum(X[np.where(X<0)]) / np.sum(X[np.where(X>0)]) < neg_tol
@@ -1170,7 +1113,7 @@ def minimise_overlap(vars, iters = 10, neg_tol = 0.001):
                         n = 0.0
                         p = 1.0
                         while (n / p) <= neg_tol:
-                            vars_out[i]['function']['value'] -= 0.001 * vars_out[j]['function']['value']
+                            vars_out[i]['function']['value'] -= 0.00001 * vars_out[j]['function']['value']
                             f = vars_out[i]['function']['value']
                             n = np.abs(np.sum(f[np.where(f < 0.0)]))
                             p = np.sum(np.sum(f[np.where(f > 0.0)]))

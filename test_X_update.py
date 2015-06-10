@@ -9,7 +9,7 @@ import scipy
 processes = 4
 
 # test data
-M = 3000
+M = 24000
 N = 3000
 
 
@@ -24,7 +24,7 @@ hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [
 # 2 random variables
 #-------------------
 hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                pos = [100, 120], sigma_mu = 0., sigma_g = 0.0, \
+                                                pos = [100, 130], sigma_mu = 0., sigma_g = 0.0, \
                                                 mus=None, ns=None, gs=None, processes = processes)
 
 
@@ -65,7 +65,7 @@ background = {
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : s},
+        'function'  : {'update': True, 'value' : s, 'smooth' : 2.},
         #'function'  : {'update': False, 'value' : Xv[1]},
         }
 
@@ -93,15 +93,15 @@ data = {
         'vars'       : [background, sPhoton], 
         'offset'     : data2['offset'],
         'gain'       : data2['gain'],
-        'counts'     : {'update': False, 'value' : counts},
+        'counts'     : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-result = MaxLhist.refine([data2, data], iterations=1, processes = processes)
+result = MaxLhist.refine_seq([data2, data], iterations=3, processes = processes)
 
-print 'fidelity counts :' , np.sum((counts - result.result['run']['counts'])**2)/np.sum(counts**2)
+print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)
 #print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
 print 'rms      mus    :' , np.sqrt( np.mean( (mus - result.result['run']['offset'])**2 ) )

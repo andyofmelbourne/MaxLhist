@@ -255,6 +255,77 @@ def refine(datas, iterations=1, processes = 1):
     result.datas = datas
     return result
 
+def refine_seq(datas, iterations=1, processes = 1):
+    offsets, gains, vars, datas = process_input(datas)
+
+    # update the guess
+    #-----------------
+    errors = []
+    
+    e   = ut.log_likelihood_calc_many(datas, processes = processes)
+    errors.append(e)
+    print 0, 'log likelihood error:', e
+    
+    for i in range(iterations):
+        # new counts 
+        print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
+        for d in datas:
+            if d['counts']['update']: 
+                counts = ut.update_counts(d, processes = processes)
+                d['counts']['value'] = np.array(counts)
+        
+        # new functions 
+        print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
+        Xv = ut.update_fs_new(vars, datas, processes = processes)
+
+        for v in range(len(vars)):
+            if vars[v]['function']['update'] :
+                vars[v]['function']['value'] = Xv[v]
+
+        # new gain / offsets 
+        for j in range(len(gains)):
+            if gains[j]['update'] :
+                # grab all the data that has this gain
+                ds              = [d for d in datas if gains[j] is d['gain']]
+                print 'updating the offset and gain of: ', [d['name'] for d in ds]
+                offsets[j]['value'], gains[j]['value'] = ut.update_mus_gain(ds, processes = processes) 
+                
+        # now check if there are any offsets without gain updates
+        for j in range(len(offsets)):
+            if offsets[j]['update'] :
+                # grab all the data that has this offset
+                ds              = [d for d in datas if (offsets[j] is d['offset']) and (d['gain']['update']==False)]
+                if len(ds) > 0 :
+                    print 'updating the offset: ', [d['name'] for d in ds]
+                    offsets[j]['value'] = ut.update_mus_not_gain(ds)
+        
+
+        print 'minimising overlap:'
+        Xv = ut.minimise_overlap(vars)
+        for v in range(len(vars)):
+            if vars[v]['function']['update'] :
+                vars[v]['function']['value'] = Xv[v]
+        
+        # new counts 
+        print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
+        for d in datas:
+            if d['counts']['update']: 
+                counts = ut.update_counts(d, processes = processes)
+                d['counts']['value'] = np.array(counts)
+        
+        e   = ut.log_likelihood_calc_many(datas, processes = processes )
+        errors.append(e)
+        print i+1, 'log likelihood error:', e
+
+    
+
+    errors = np.array(errors)
+    
+    result = Result(vars, datas, errors)
+    # temp
+    result.vars  = vars
+    result.datas = datas
+    return result
 
 class Result():
     def __init__(self, vars, datas, errors):
