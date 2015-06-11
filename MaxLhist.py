@@ -299,7 +299,8 @@ def refine_seq(datas, iterations=1, processes = 1):
                     print 'updating the offset: ', [d['name'] for d in ds]
                     offsets[j]['value'] = ut.update_mus_not_gain(ds)
         
-
+        
+        """
         print 'minimising overlap:'
         Xv = ut.minimise_overlap(vars)
         for v in range(len(vars)):
@@ -312,6 +313,7 @@ def refine_seq(datas, iterations=1, processes = 1):
             if d['counts']['update']: 
                 counts = ut.update_counts(d, processes = processes)
                 d['counts']['value'] = np.array(counts)
+        """
         
         e   = ut.log_likelihood_calc_many(datas, processes = processes )
         errors.append(e)

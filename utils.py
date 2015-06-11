@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 from scipy.ndimage import gaussian_filter1d
 from multiprocessing import Pool 
+import copy
 
 def roll(a, x):
     """
@@ -55,7 +56,7 @@ def roll_real(a, x, keep_positive = True):
     N    = a.shape[0]
     A    = np.fft.rfft(a)
     ramp = np.exp(-2.0J * np.pi * x * np.arange(N//2 + 1) / float(N))
-    b    = np.fft.irfft(A * ramp)
+    b    = np.fft.irfft(A * ramp, N)
 
     if keep_positive :
         b[np.where(b<0)] = 0.0
@@ -689,15 +690,18 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
     # update the guess
     X = update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X, processes = processes)
     
-    # positivity
-    X[np.where(X<0)] = 0
-    
     # smoothness
     for v in range(V):
-        if vars[v].has_key('smooth'):
-            if vars[v]['smooth'] > 0 :
-                print 'smoothing ', vars[v]['name'], 'by', vars[v]['smooth']
-                X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
+        if vars[v]['function'].has_key('smooth'):
+            if vars[v]['function']['smooth'] > 0 :
+                print 'smoothing ', vars[v]['name'], 'by', vars[v]['function']['smooth']
+                #X[v, :] = gaussian_filter1d(X[v], vars[v]['smooth'])
+                temp                           = np.fft.rfft( X[v] )
+                temp[-int(vars[v]['function']['smooth']):] = 0.0 
+                X[v] = np.fft.irfft( temp, len(X[v]) )
+    
+    # positivity
+    X[np.where(X<0)] = 0
     
     # normalise
     if normalise :
@@ -1102,9 +1106,9 @@ def minimise_overlap(vars, iters = 10, neg_tol = 0.0001):
     recursively subtract X's from the others while keeping X positive
     by 'positive' we mean np.sum(X[np.where(X<0)]) / np.sum(X[np.where(X>0)]) < neg_tol
     """
-    vars_out  = list(vars)
+    vars_out  = copy.deepcopy(vars)
     for k in range(iters):
-        for i in range(len(vars_out)):
+        for i in range(len(vars_out)-1, -1, -1):
             if vars_out[i]['function']['update']:
                 # loop over every function that is not our function
                 for j in range(len(vars_out)):
@@ -1113,14 +1117,23 @@ def minimise_overlap(vars, iters = 10, neg_tol = 0.0001):
                         n = 0.0
                         p = 1.0
                         while (n / p) <= neg_tol:
-                            vars_out[i]['function']['value'] -= 0.00001 * vars_out[j]['function']['value']
+                            vars_out[i]['function']['value'] -= 0.000001 * vars_out[j]['function']['value']
                             f = vars_out[i]['function']['value']
-                            n = np.abs(np.sum(f[np.where(f < 0.0)]))
-                            p = np.sum(np.sum(f[np.where(f > 0.0)]))
-                    # enforce positivity
-                    vars_out[i]['function']['value'][np.where(vars_out[i]['function']['value']<0)] = 0.0
-                    # enforce normalisation
-                    vars_out[i]['function']['value'] /= np.sum(vars_out[i]['function']['value'])
+                            n = -np.sum(f[np.where(f < 0.0)])
+                            p = np.sum(f[np.where(f > 0.0)])
+
+                        # enforce smoothness
+                        if vars_out[i]['function'].has_key('smooth'):
+                            if vars_out[i]['function']['smooth'] > 0 :
+                                temp    = np.fft.rfft( vars_out[i]['function']['value'] )
+                                temp[-int(vars_out[i]['function']['smooth']):] = 0.0 
+                                vars_out[i]['function']['value'] = np.fft.irfft( temp, len(vars_out[i]['function']['value']) )
+                        
+                        # enforce positivity
+                        vars_out[i]['function']['value'][np.where(vars_out[i]['function']['value']<0)] = 0.0
+                        
+                        # enforce normalisation
+                        vars_out[i]['function']['value'] /= np.sum(vars_out[i]['function']['value'])
      
     Xvs = [v['function']['value'] for v in vars_out] 
     return Xvs

@@ -4,16 +4,19 @@ import utils as ut
 from multiprocessing import Pool 
 
 
-def generate_hist_pix((m, ns_m, Xv, i, mus_m, gs_m, N, V, i_bins)):
-    f = np.zeros_like(Xv[0])
+def generate_hist_pix((m, ns_m, Xv, mus_m, gs_m, N, V, i_bins, subsample)):
+    # subpixel sampling
+    I = i_bins[-1]
+    i = np.arange(0, I*subsample, 1)
+    f = np.zeros( (I*subsample), dtype=np.float64)
     for v in range(V):
         f += ns_m[v] * Xv[v]
     
-    f = ut.gain(f, gs_m)
-    f = ut.roll_real(f, mus_m)
+    f = f / np.sum(f)
+    
     # create a new random variable with the offset and gain value
     F       = scipy.stats.rv_discrete(name='F', values = (i, f))
-    ff      = F.rvs(size = N)
+    ff      = mus_m + gs_m * (F.rvs(size = N).astype(np.float64) / float(subsample))
     hist, bins = np.histogram(ff, bins = i_bins)
     return hist
 
@@ -29,15 +32,16 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
     sigma(g_m)  = sigma_g
     """
     # the "adu" range
-    i      = np.arange(0, I, 1)
+    subsample = 100
+    i      = np.arange(0, subsample * I, 1).astype(np.float)
     i_bins = np.arange(0, I+1, 1)
     
     # the probability functions 
     Xv = []
     for v in range(V):
-        f = np.exp( - (i - pos[v]).astype(np.float64)**2 / (2. * sigmas[v]**2) )
+        f = np.exp( - (i - subsample * pos[v]).astype(np.float64)**2 / (2. * (subsample * sigmas[v])**2) )
         f = f / np.sum(f)
-        Xv.append(f.copy()) 
+        Xv.append(f.copy())
     
     # counts: I will make all but the first X have a maximum count rate of 0.2
     # the probability function for the number of photons
@@ -68,7 +72,7 @@ def forward_model_nvars(I=250, M=10, N=1000, V=3, sigmas = [5., 7., 9.], pos = [
 
     args = []
     for m in range(M):
-        args.append( (m, ns[:, m], Xv, i, mus[m], gs[m], N, V, i_bins) )
+        args.append( (m, ns[:, m], Xv, mus[m], gs[m], N, V, i_bins, subsample) )
 
     pool  = Pool(processes=processes)
     hists = pool.map(generate_hist_pix, args)

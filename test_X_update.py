@@ -9,9 +9,9 @@ import scipy
 processes = 4
 
 # test data
-M = 24000
+M = 100
 N = 3000
-
+I = 250
 
 # 3 random variables
 #-------------------
@@ -23,19 +23,25 @@ hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=3, sigmas = [
 
 # 2 random variables
 #-------------------
-hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=250, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                pos = [100, 130], sigma_mu = 0., sigma_g = 0.0, \
+hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5., 7.], \
+                                                pos = [100, 130], sigma_mu = 2., sigma_g = 0.1, \
                                                 mus=None, ns=None, gs=None, processes = processes)
 
 
 counts = ns * np.sum(hists, axis=1)
 
 
-hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=250, M=M, N=N, V=1, sigmas = [5.], \
+hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=I, M=M, N=N, V=1, sigmas = [5.], \
                                                      pos = [100], sigma_mu = 0., sigma_g = 0.0, \
                                                      mus=mus, ns=None, gs=gs, processes = processes)
+Xv = np.array(Xv)
+Xv_downsample = np.zeros( (Xv.shape[0], I), dtype=Xv.dtype)
+for v in range(len(Xv)) :
+    i     = np.arange(I)
+    Xv_downsample[v] = np.interp(np.linspace(0, Xv.shape[1]-1, I), np.arange(Xv.shape[1]), Xv[v])
+    Xv_downsample[v] = Xv_downsample[v] / np.sum(Xv_downsample[v])
 
-
+Xv = Xv_downsample
 
 # initial guess
 I = 250
@@ -65,7 +71,7 @@ background = {
 sPhoton = {
         'name'      : 'single photon',
         'type'      : 'random variable',
-        'function'  : {'update': True, 'value' : s, 'smooth' : 2.},
+        'function'  : {'update': True, 'value' : s, 'smooth' : 0.},
         #'function'  : {'update': False, 'value' : Xv[1]},
         }
 
@@ -82,8 +88,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': False, 'value' : mus},
-        'gain'       : {'update': False, 'value' : gs},
+        'offset'     : {'update': True, 'value' : None},
+        'gain'       : {'update': True, 'value' : None},
         'comment'    : 'testing the X update'
         }
 
@@ -106,8 +112,8 @@ print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.su
 #print 'fidelity mus    :' , np.sum((mus - result.result['run']['offset'])**2)/np.sum(mus**2)
 print 'rms      mus    :' , np.sqrt( np.mean( (mus - result.result['run']['offset'])**2 ) )
 for v in result.vars :
-    for X in Xv :
-        print 'fidelity ', v['name'], ' Xv ', np.sum((v['function']['value'] - X)**2)/np.sum(X**2)
+    for i in range(Xv.shape[0]) :
+        print 'fidelity ', v['name'], ' Xv ', np.sum((v['function']['value'] - Xv[i])**2)/np.sum(Xv[i]**2)
     for X in [b,s] :
         print 'init ', v['name'], ' Xv ', np.sum((v['function']['value'] - X)**2)/np.sum(X**2)
 
