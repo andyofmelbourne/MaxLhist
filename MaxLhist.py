@@ -164,6 +164,7 @@ def refine(datas, iterations=1, processes = 1):
     gains_temp     = copy.deepcopy(gains)
     vars_temp      = copy.deepcopy(vars)
     
+    i = 0
     e   = ut.log_likelihood_calc_many(datas, processes = processes)
     errors.append(e)
     print 0, 'log likelihood error:', e
@@ -262,6 +263,7 @@ def refine_seq(datas, iterations=1, processes = 1):
     #-----------------
     errors = []
     
+    i = 0
     e   = ut.log_likelihood_calc_many(datas, processes = processes)
     errors.append(e)
     print 0, 'log likelihood error:', e
@@ -319,7 +321,24 @@ def refine_seq(datas, iterations=1, processes = 1):
         errors.append(e)
         print i+1, 'log likelihood error:', e
 
+    # new counts 
+    print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
+    for d in datas:
+        if d['counts']['update']: 
+            counts = ut.update_counts(d, processes = processes)
+            d['counts']['value'] = np.array(counts)
     
+    # new functions 
+    print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
+    Xv = ut.update_fs_new(vars, datas, processes = processes)
+
+    for v in range(len(vars)):
+        if vars[v]['function']['update'] :
+            vars[v]['function']['value'] = Xv[v]
+    
+    e   = ut.log_likelihood_calc_many(datas, processes = processes )
+    errors.append(e)
+    print i+2, 'log likelihood error:', e
 
     errors = np.array(errors)
     
@@ -411,12 +430,25 @@ class Result():
         pg.setConfigOptions(antialias=True)
         
         # show f and the mu values
+        ns   = counts / np.sum(hists, axis=-1)
+        fi   = lambda f: fs[i] * np.sum(ns[i] * np.sum(counts, axis=0)) / float(total_counts)
+        ftot = np.sum([fi(i) for i in range(len(fs))], axis=0) 
+
+        print 'counts, shape', counts.shape, np.allclose( np.sum(hists, axis=-1), np.sum(counts, axis=0))
+        print 'fs norm      ', [np.sum(f) for f in fs], np.sum(fs)
+        print 'ftot norm    ', np.sum(ftot)
+
+        #for j in range(hists.shape[1]):
+        #    print j, ftot[j] * hists.shape[0], hist_proj[j] / hists.shape[0]
+
         Xplot = win.addPlot(title='functions')
         Xplot.plot(x = i_range, y = hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
         f_tot = np.zeros_like(fs[0])
         for i in range(len(fs)):
-            Xplot.plot(x = i_range, y = fs[i] * np.sum(counts[i]) / total_counts + 1.0e-10, pen=(i, len(fs)+1), width = 10)
-        Xplot.plot(x = i_range, y = np.sum(fs * np.sum(counts, axis=-1)[:, np.newaxis] / total_counts, axis=0) + 1.0e-10, pen=(len(fs), len(fs)+1), width = 10)
+            #Xplot.plot(x = i_range, y = fs[i] * np.sum(counts[i]) / total_counts + 1.0e-10, pen=(i, len(fs)+1), width = 10)
+            Xplot.plot(x = i_range, y = fi(i) + 1.0e-10, pen=(i, len(fs)+1), width = 10)
+        #Xplot.plot(x = i_range, y = np.sum(fs * np.sum(counts, axis=-1)[:, np.newaxis] / total_counts, axis=0) + 1.0e-10, pen=(len(fs), len(fs)+1), width = 10)
+        Xplot.plot(x = i_range, y = ftot + 1.0e-10, pen=(len(fs), len(fs)+1), width = 10)
         
         # now plot the histograms
         m      = 0

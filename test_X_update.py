@@ -9,7 +9,7 @@ import scipy
 processes = 4
 
 # test data
-M = 100
+M = 500
 N = 3000
 I = 250
 
@@ -31,8 +31,8 @@ hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5.
 counts = ns * np.sum(hists, axis=1)
 
 
-hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=I, M=M, N=N, V=1, sigmas = [5.], \
-                                                     pos = [100], sigma_mu = 0., sigma_g = 0.0, \
+hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=I, M=M, N=int(N/4.), V=1, sigmas = [5.], \
+                                                     pos = [100], sigma_mu = 3., sigma_g = 0.15, \
                                                      mus=mus, ns=None, gs=gs, processes = processes)
 Xv = np.array(Xv)
 Xv_downsample = np.zeros( (Xv.shape[0], I), dtype=Xv.dtype)
@@ -88,8 +88,8 @@ data2 = {
         'name'       : 'dark run',
         'histograms' : hists2,
         'vars'       : [background], 
-        'offset'     : {'update': True, 'value' : None},
-        'gain'       : {'update': True, 'value' : None},
+        'offset'     : {'update': False, 'value' : mus},
+        'gain'       : {'update': False, 'value' : gs},
         'comment'    : 'testing the X update'
         }
 
@@ -97,15 +97,19 @@ data = {
         'name'       : 'run',
         'histograms' : hists,
         'vars'       : [background, sPhoton], 
-        'offset'     : data2['offset'],
-        'gain'       : data2['gain'],
-        'counts'     : {'update': True, 'value' : None},
+        #'offset'     : data2['offset'],
+        #'gain'       : data2['gain'],
+        'offset'     : {'update': False, 'value' : mus2},
+        'gain'       : {'update': False, 'value' : gs2},
+        'counts'     : {'update': False, 'value' : counts},
         'comment'    : 'testing the X update'
         }
 
 # Retrieve
 #---------
-result = MaxLhist.refine_seq([data2, data], iterations=3, processes = processes)
+result = MaxLhist.refine_seq([data2], iterations=1, processes = processes)
+
+result = MaxLhist.refine_seq([data2, data], iterations=1, processes = processes)
 
 print 'fidelity counts :' , np.sum((counts[1:] - result.result['run']['counts'][1:])**2)/np.sum(counts[1:]**2)
 print 'fidelity gain   :' , np.sum((gs - result.result['run']['gain'])**2)/np.sum(gs**2)

@@ -26,6 +26,7 @@ def roll(a, x):
     b : float numpy array
         Fourier shifted input array.
     """
+    print '\n Warning: this is depricated'
     A    = np.fft.fft(a)
     ramp = np.exp(-2.0J * np.pi * x * np.fft.fftfreq(a.shape[0]))
     b    = np.fft.ifft(A * ramp)
@@ -53,6 +54,7 @@ def roll_real(a, x, keep_positive = True):
     b : float numpy array
         Fourier shifted input array.
     """
+    print '\n Warning: this is depricated'
     N    = a.shape[0]
     A    = np.fft.rfft(a)
     ramp = np.exp(-2.0J * np.pi * x * np.arange(N//2 + 1) / float(N))
@@ -101,6 +103,7 @@ def shift_f_real(f, shift):
     f_shift : 1d float array
         The shifted representation of f.
     """
+    print '\n Warning: this is depricated'
     fh      = np.fft.rfft(f)
     ramp    = np.exp(-2.0J * np.pi * shift * np.arange(float(fh.shape[0])) \
               / float(f.shape[0]))
@@ -188,8 +191,7 @@ def log_likelihood_calc_many_pool((m, Xv, counts_m, hists_m, gs_m, mus_m, prob_t
     Is = np.where(hists_m > 0)
     
     # evaluate the gained then shifted probability function
-    f = gain(f, gs_m) 
-    f = roll_real(f, mus_m)[Is]
+    f = gain_offset(f, gs_m, mus_m)[Is]
     f[np.where(f < 0)] = 0.0
 
     # sum the log liklihood errors for this pixel
@@ -252,8 +254,7 @@ def log_likelihood_calc_pixelwise_many(d, prob_tol = 1.0e-10):
         Is = np.where(hists[m] > 0)
         
         # evaluate the shifted probability function
-        fs = gain(f, gs[m])
-        fs = roll_real(f, mus[m])[Is] 
+        fs = gain_offset(f, gs[m], mus[m])[Is]
 
         # sum the log liklihood errors for this pixel
         e  = hists[m, Is] * np.log(prob_tol + fs)
@@ -403,15 +404,26 @@ def jacobian_fs_calc(f, mus, hists, prob_tol = 1.0e-10):
     """
     return grad
 
-def gain(f, g):
+def gain_offset(f, g, mu, norm=1.):
+    i     = np.arange(f.shape[0])
+    fout  = np.interp(g*i - mu, i, f)
+    fout  = fout * norm / np.sum(fout)
+    return fout
+
+def un_offset_gain(f, mu, g, norm=None):
+    i     = np.arange(f.shape[0])
+    fout  = np.interp((i + mu)/g, i, f.astype(np.float64))
+    if norm is None :
+        norm = np.sum(f)
+    fout  = fout * norm / np.sum(fout)
+    return fout
+
+def gain(f, g, norm=None):
     i     = np.arange(f.shape[0])
     fout  = np.interp(g*i, i, f)
-    # preserve normalisation
-    f_sum = np.sum(f)
-    if np.abs(f_sum) < 1.0e-10 :
-        fout = fout - np.sum(fout)
-    else :
-        fout  = fout * f_sum / np.sum(fout)
+    if norm is None :
+        norm = np.sum(f)
+    fout  = fout * norm / np.sum(fout)
     return fout
 
 # update
@@ -442,15 +454,17 @@ def update_fs_many(var, ds):
     for d in ds:
         hist   = d['histograms']
         mus    = d['offset']['value']
+        gs     = d['gain']['value']
         vi     = np.where([var is vt for vt in d['vars']])[0][0]
         for m in range(len(mus)) :
             h_m = hist[m].astype(np.float64)
             
-            # un-shift and un-gain
-            h_m = roll_real(h_m, - mus[m])
-            h_m = gain(h_m, 1./d['gain']['value'][m])
+            norm = np.sum(h_m)
             
-            ns  = d['counts']['value'][vi][m] / np.sum(h_m)
+            # un-shift and un-gain
+            h_m = un_offset_gain(h_m, mus[m], gs[m], norm=norm)[Is]
+            
+            ns  = d['counts']['value'][vi][m] / norm
             h  += ns * h_m
         
     # apply a mask to aviod unconstrained values
@@ -480,8 +494,7 @@ def update_fs_many(var, ds):
     return X
 
 def ungain_unshift_hist_pool((hist_m, mu_m, g_m)):
-    hist_adj = roll_real(hist_m.astype(np.float64), -mu_m)
-    hist_adj = gain(hist_adj, 1. / g_m) 
+    hist_adj = un_offset_gain(hist_m.astype(np.float64), mu_m, g_m, norm=float(np.sum(hist_m)))
     return hist_adj
 
 def ungain_unshift_hist(hists, mus, gs, processes = 1):
@@ -551,13 +564,13 @@ def update_Xs_pool_new((hj, total_counts, update_vs, nupdate_vs, Xj, ns, bounds,
         Xj[update_vs] = 0.0
     return Xj
 
-def update_Xs_pool_2((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
+def update_Xs_pool_2((hj, counts_m, update_vs, nupdate_vs, Xj, ns, j)):
     if len(update_vs) == 2 :
         ms = np.where(hj > 0)[0]
         if len(ms) > 0 :
-            gi = len(hj) * np.sum(hj) / float(total_counts)
-            N0 = np.sum(ns[0, :])
-            N1 = np.sum(ns[1, :])
+            gi = np.sum(hj[ms]) 
+            N0 = np.sum(counts_m * ns[0, :])
+            N1 = np.sum(counts_m * ns[1, :])
             
             bounds_x1 = [( np.max( [0, (gi-N0)/N1] ) , np.min( [1, gi/N1] ) )] 
             
@@ -581,6 +594,11 @@ def update_Xs_pool_2((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
 
             Xv_out[1]    = x1 
             Xv_out[0]    = (gi - N1 * x1) / N0
+            #print j, gi, N0 * Xv_out[0] + N1 * Xv_out[1]
+            #print '\nupdating two var', j, len(hj), x1, np.array(bounds_x1[0])
+            #print ns[0, :: 1000]
+            #print np.allclose(np.sum(ns, axis=0), np.ones_like(ns[0])), gi, N0*Xv_out[0] + N1*Xv_out[1]
+            #print np.sum(counts_m * (ns[0] * Xv_out[0] + ns[1] * Xv_out[1])), np.sum(hj)
             return Xv_out
         else : 
             return np.zeros_like(Xj)
@@ -588,7 +606,8 @@ def update_Xs_pool_2((hj, total_counts, update_vs, nupdate_vs, Xj, ns, j)):
     if len(update_vs) == 1 :
         ms = np.where(hj > 0)[0]
         if len(ms) > 0 :
-            gi = len(hj) * np.sum(hj) / float(total_counts)
+            print 'updating one var'
+            gi = np.sum(hj[ms] / counts_m[ms])
             N0 = np.sum(ns[update_vs[0], :])
             N1 = np.sum(ns[nupdate_vs[0], :])
             
@@ -619,7 +638,7 @@ def update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X
         return X
     
     if X.shape[0] == 2 :
-        args = [(hist[:, j], total_counts, update_vs, nupdate_vs, X[:, j], ns, j) for j in range(hist.shape[-1])]
+        args = [(hist[:, j], counts_m, update_vs, nupdate_vs, X[:, j], ns, j) for j in range(hist.shape[-1])]
         #Xs = []
         #for arg in args :
         #    Xs.append( update_Xs_pool_2(arg))
@@ -701,12 +720,12 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
                 X[v] = np.fft.irfft( temp, len(X[v]) )
     
     # positivity
-    X[np.where(X<0)] = 0
+    #X[np.where(X<0)] = 0
     
     # normalise
-    if normalise :
-        for v in range(V):
-            X[v, :] = X[v, :] / np.sum(X[v, :])
+    #if normalise :
+    #    for v in range(V):
+    #        X[v, :] = X[v, :] / np.sum(X[v, :])
     return X
 
 
@@ -979,8 +998,7 @@ def update_counts_brute2_pool((h, Xv, Nv, g, mu)):
     return Nv_out_m 
     
 def update_counts_brute2(h, Xv, Nv, g, mu):
-    hgm = roll_real(h, -mu)
-    hgm = gain(hgm, 1 / g)
+    hgm = un_offset_gain(h, mu, g, norm=np.sum(h))
     
     # we don't need the zeros...
     Is  = np.where(hgm >= 1)[0]
@@ -1002,8 +1020,7 @@ def update_counts_brute2(h, Xv, Nv, g, mu):
     return Nv_out
 
 def update_counts_brute(h, Xv, Nv, g, mu):
-    hgm = roll_real(h, -mu)
-    hgm = gain(hgm, 1 / g)
+    hgm = un_offset_gain(h, mu, g, norm=np.sum(h))
     
     # we don't need the zeros...
     Is  = np.where(hgm >= 1)[0]
@@ -1023,8 +1040,7 @@ def update_counts_brute(h, Xv, Nv, g, mu):
     return Nv_out
 
 def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
-    hgm = roll_real(h, -mu)
-    hgm = gain(hgm, 1 / g)
+    hgm = un_offset_gain(h, mu, g, norm=np.sum(h))
 
     # we don't need the zeros...
     Is = np.where(hgm >= 1)[0]
@@ -1066,8 +1082,7 @@ def update_counts_pix_odd_V(h, Xv, Nv, g, mu):
 
 
 def update_counts_pix_even_V(h, Xv, Nv, g, mu):
-    hgm = roll_real(h, -mu)
-    hgm = gain(hgm, 1 / g)
+    hgm = un_offset_gain(h, mu, g, norm=np.sum(h))
     
     # we don't need the zeros...
     Is = np.where(hgm >= 1)
@@ -1106,6 +1121,7 @@ def minimise_overlap(vars, iters = 10, neg_tol = 0.0001):
     recursively subtract X's from the others while keeping X positive
     by 'positive' we mean np.sum(X[np.where(X<0)]) / np.sum(X[np.where(X>0)]) < neg_tol
     """
+    print '\n minimising overlap...'
     vars_out  = copy.deepcopy(vars)
     for k in range(iters):
         for i in range(len(vars_out)-1, -1, -1):

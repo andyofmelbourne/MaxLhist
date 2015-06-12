@@ -16,7 +16,7 @@ def generate_hist_pix((m, ns_m, Xv, mus_m, gs_m, N, V, i_bins, subsample)):
     
     # create a new random variable with the offset and gain value
     F       = scipy.stats.rv_discrete(name='F', values = (i, f))
-    ff      = mus_m + gs_m * (F.rvs(size = N).astype(np.float64) / float(subsample))
+    ff      = mus_m + (F.rvs(size = N).astype(np.float64) / float(subsample)) / gs_m
     hist, bins = np.histogram(ff, bins = i_bins)
     return hist
 
@@ -107,8 +107,7 @@ def forward_hists_nvar(Xv, mus, gs, counts):
         for v in range(len(Xv)):
             f += counts[v, m] * Xv[v]
         
-        f = ut.gain(f, gs[m])
-        f = ut.roll_real(f, mus[m]) 
+        f = ut.gain_offset(f, gs[m], mus[m], norm = np.sum(f))
         hists[m] = f
     return hists
 
