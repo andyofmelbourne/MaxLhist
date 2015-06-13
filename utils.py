@@ -672,11 +672,11 @@ def update_Xs(hist, total_counts, counts_m, update_vs, nupdate_vs, ns, bounds, X
 
 def update_fs_new(vars, datas, normalise = True, processes = 1):
     # join the histograms and counts into a big histogram thing
-    M = datas[0]['histograms'].shape[0]
+    M = np.sum([datas[i]['histograms'].shape[0] for i in range(len(datas))])
     D = len(datas)
     V = len(vars)
     I = datas[0]['histograms'].shape[1]
-    counts = np.zeros((V, M * D), dtype=np.float64)
+    counts = np.zeros((V, M), dtype=np.float64)
     X      = np.zeros((V, I), dtype=np.float64)
 
     update_vs  = np.where([v['function']['update'] for v in vars])[0]
@@ -689,6 +689,7 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
     if len(update_vs) == 0 :
         return X
     
+    mstart = 0
     for d in range(0, D):
         if d == 0 :
             hist = ungain_unshift_hist(datas[0]['histograms'], datas[0]['offset']['value'], datas[0]['gain']['value'], processes = processes)
@@ -696,11 +697,13 @@ def update_fs_new(vars, datas, normalise = True, processes = 1):
             hist = np.concatenate((hist, ungain_unshift_hist(datas[d]['histograms'], datas[d]['offset']['value'], datas[d]['gain']['value'], processes = processes)))
         
         # fill the counts for datas vars
+        mstep = datas[d]['histograms'].shape[0]
         for v in range(V):
             X[v, :] = vars[v]['function']['value']
             i = [u for u in range(len(datas[d]['vars'])) if vars[v] is datas[d]['vars'][u]]
             for j in i:
-                counts[j, d * M : (d+1) * M] = datas[d]['counts']['value'][v]
+                counts[j, mstart: mstart + mstep] = datas[d]['counts']['value'][v]
+        mstart += mstep
 
     counts_m       = np.sum(counts, axis=0)
     total_counts   = np.sum(counts_m)

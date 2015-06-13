@@ -121,7 +121,8 @@ def process_input(datas):
 
     for gain in gains :
         if gain['value'] is None :
-            gain['value'] = np.ones((datas[0]['histograms'].shape[0]), dtype=np.float64)
+            ds            = [d for d in datas if gain is d['gain']]
+            gain['value'] = np.ones((ds[0]['histograms'].shape[0]), dtype=np.float64)
         else :
             if gain['value'].shape[0] != datas[0]['histograms'].shape[0] :
                 print "Error:", data['name']+"'s initial guess for the gain does not have the right shape:", data['gain']['value'].shape[0], ' hists.shape[0]=', data['histograms'].shape[0]
@@ -302,7 +303,6 @@ def refine_seq(datas, iterations=1, processes = 1):
                     offsets[j]['value'] = ut.update_mus_not_gain(ds)
         
         
-        """
         print 'minimising overlap:'
         Xv = ut.minimise_overlap(vars)
         for v in range(len(vars)):
@@ -315,7 +315,6 @@ def refine_seq(datas, iterations=1, processes = 1):
             if d['counts']['update']: 
                 counts = ut.update_counts(d, processes = processes)
                 d['counts']['value'] = np.array(counts)
-        """
         
         e   = ut.log_likelihood_calc_many(datas, processes = processes )
         errors.append(e)
