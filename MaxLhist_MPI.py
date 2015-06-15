@@ -75,6 +75,8 @@ class Histograms():
         self.pix_map = self.unshift_ungain(self.pix_map)
         self.pix_map = self.pixel_multiplicity(self.pix_map)
         self.pix_map = self.pixel_errors(self.Xs, self.pix_map)
+        comm.barrier()
+
 
     def check_input(self, datas):
         """
