@@ -975,7 +975,7 @@ def update_counts(d, processes=1):
     mus = d['offset']['value']
     gs  = d['gain']['value']
     Xv  = [var['function']['value'] for var in d['vars']]
-
+    
     update_counts_pix = update_counts_brute2
     args = [(d['histograms'][m], Xv, d['counts']['value'][:, m], gs[m], mus[m]) for m in range(M)]
     
@@ -983,17 +983,7 @@ def update_counts(d, processes=1):
     Nv_out = np.array(pool.map(update_counts_brute2_pool, args)).T
     pool.close()
     pool.join()
-
-
-
-    """
-    for m in range(M):
-        h  = d['histograms'][m]
-        Nv = d['counts']['value'][:, m] 
-        
-        Nv_out[:, m] = update_counts_pix(h, Xv, Nv, gs[m], mus[m]) 
     
-    """
     return Nv_out
 
 def update_counts_brute2_pool((h, Xv, Nv, g, mu)):

@@ -320,13 +320,6 @@ def refine_seq(datas, iterations=1, processes = 1):
         errors.append(e)
         print i+1, 'log likelihood error:', e
 
-    # new counts 
-    print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
-    for d in datas:
-        if d['counts']['update']: 
-            counts = ut.update_counts(d, processes = processes)
-            d['counts']['value'] = np.array(counts)
-    
     # new functions 
     print 'updating the functions:', [v['name'] for v in vars if v['function']['update']] 
     Xv = ut.update_fs_new(vars, datas, processes = processes)
@@ -334,6 +327,13 @@ def refine_seq(datas, iterations=1, processes = 1):
     for v in range(len(vars)):
         if vars[v]['function']['update'] :
             vars[v]['function']['value'] = Xv[v]
+
+    # new counts 
+    print 'updating the counts for ', [d['name'] for d in datas if d['counts']['update']]
+    for d in datas:
+        if d['counts']['update']: 
+            counts = ut.update_counts(d, processes = processes)
+            d['counts']['value'] = np.array(counts)
     
     e   = ut.log_likelihood_calc_many(datas, processes = processes )
     errors.append(e)
