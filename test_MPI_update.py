@@ -13,7 +13,7 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 100
+    M = 500
     N = 1000
     I = 250
 
@@ -30,7 +30,7 @@ if rank == 0 :
     # 2 random variables
     #-------------------
     hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                    pos = [100, 130], sigma_mu = 150., sigma_g = 0.1, \
+                                                    pos = [100, 130], sigma_mu = 100., sigma_g = 0.1, \
                                                     mus=None, ns=None, gs=None, processes = processes)
 
 
@@ -38,7 +38,7 @@ if rank == 0 :
 
 
     hists2, mus2, gs2, ns2, Xv2 = fm.forward_model_nvars(I=I, M=M/2, N=int(N/4.), V=1, sigmas = [5.], \
-                                                         pos = [100], sigma_mu = 3., sigma_g = 0.15, \
+                                                         pos = [100], sigma_mu = 10., sigma_g = 0.15, \
                                                          mus=None, ns=None, gs=None, processes = processes)
     Xv = np.array(Xv)
     Xv_downsample = np.zeros( (Xv.shape[0], I), dtype=Xv.dtype)
@@ -98,9 +98,9 @@ if rank == 0 :
             'name'       : 'dark run',
             'histograms' : hists2,
             'vars'       : [background], 
-            'offset'     : {'update': True, 'value' : mus2},
-            'counts'     : {'update': True, 'value' : None},
-            'gain'       : {'update': True, 'value' : gs2},
+            'offset'     : {'update': False, 'value' : mus2},
+            'counts'     : {'update': False, 'value' : None},
+            'gain'       : {'update': False, 'value' : gs2},
             'comment'    : 'testing the X update'
             }
 
@@ -108,16 +108,17 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': True, 'value' : None},
-            'gain'       : {'update': True, 'value' : None},
-            'counts'     : {'update': True, 'value' : counts},
+            'offset'     : {'update': False, 'value' : mus},
+            'gain'       : {'update': False, 'value' : gs},
+            'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
-
-    # Retrieve
-    #---------
-    H = MaxLhist_MPI.Histograms([data2, data])
-
 else :
-    H = MaxLhist_MPI.Histograms([None])
+    data2 = data = None
 
+# Retrieve
+#---------
+H = MaxLhist_MPI.Histograms([data2, data])
+
+H.gather_pix_map()
+H.show()

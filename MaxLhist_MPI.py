@@ -35,29 +35,47 @@ size = comm.Get_size()
 class Histograms():
 
     def __init__(self, datas):
+        # set the array dimensions
+        #-------------------------
         if rank == 0 :
             vars, M, I, V = self.check_input(datas)
         else :
             M = I = V = 0
-
+        
         comm.barrier()
         M, I, V = comm.bcast([M, I, V], root=0)
-
+        
         # set the numpy dtypes
+        #---------------------
         dt_n  = np.dtype([('v', np.float128, (V,)), ('up', np.bool, (V,))]) 
         dt_g  = np.dtype([('v', np.float32), ('up', np.bool)]) 
         dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float128, (I,)),\
                           ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float128), ('e', np.float128)])
-        dt_Xs = np.dtype([('v', np.float128, (I,)), ('up', np.bool, (I,))])
+        dt_Xs = np.dtype([('v', np.float128, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
         self.dt_pm = dt_pm
         self.dt_Xs = dt_Xs
         
+        # check input, initialise, broadcast data to workers
+        #---------------------------------------------------
         if rank == 0 :
             pix_map, Xs  = self.process_input(datas, vars, M, I, V)
             pix_map, Xs  = self.init_input(datas, vars, pix_map, Xs)
             
             self.pix_map = chunkIt(pix_map, size)
             self.Xs      = Xs
+
+            # I need to remember which dataset belongs to 
+            # to which pixels. As well as the names and comments
+            self.datas = datas
+            # remove the raw data and put in a reference to the 
+            # pixel numbers
+            start = 0
+            for d in range(len(datas)):
+                Md = self.datas[d]['histograms'].shape[0]
+                del self.datas[d]['histograms']
+                
+                self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
+                start += Md
         else :
             self.adus    = chunkIt(range(I), size-1)
             self.pix_map = chunkIt(range(M), size-1)
@@ -205,10 +223,13 @@ class Histograms():
         for d in datas:
             # histogram data 
             hist                                              = d['histograms']
+            
+            print '\n Setting histogram data for', d['name'], 'with pixel ids:', start, start + hist.shape[0]
             pix_map['hist'][start : start + hist.shape[0], :] = hist
             
             # inverse gain
             if d['gain']['value'] is not None :
+                print '\n Setting gain values for', d['name'], 'with the input values. In the range', start, start + hist.shape[0]
                 pix_map['g']['v'][start : start + hist.shape[0]] = d['gain']['value']
             
             if d['gain']['update'] == True :
@@ -216,6 +237,7 @@ class Histograms():
             
             # adu offsets
             if d['offset']['value'] is not None :
+                print '\n Setting offsets for', d['name'], 'with the input values. In the range', start, start + hist.shape[0]
                 pix_map['mu']['v'][start : start + hist.shape[0]] = d['offset']['value']
             
             if d['offset']['update'] == True :
@@ -223,7 +245,7 @@ class Histograms():
             
             # errant counts
             counts_perpix = np.sum(hist, axis=-1)
-            max          = np.max(counts_perpix)
+            max           = np.max(counts_perpix)
             sig           = 0.1 * max
             bad_pix       = np.where(np.abs(counts_perpix - max) > sig)[0] 
             
@@ -234,26 +256,35 @@ class Histograms():
                         
             
             # counts
+            initialised_counts = []
             if d['counts']['value'] is not None :
                 if d['counts']['value'].shape[0] == 1 :
                     varno = np.where( [id(var) == id(d['vars'][0]) for var in vars] )[0][0]
                     
+                    print '\n only one random variable for', d['name'], 'setting the count fractions to one. In the range', start, start + hist.shape[0]
                     pix_map['n']['v'][start : start + hist.shape[0], varno][:] = 1.
+                    print ' and seting the update to False...', vars[varno]['name']
                     pix_map['n']['up'][start : start + hist.shape[0], :]       = False
                 else :
                     for v in range(d['counts']['value'].shape[0]):
                         # which var number is this count ?
                         varno = np.where( [id(var) == id(d['vars'][v]) for var in vars] )[0][0]
                         
-                        ns = d['counts']['value'][v].astype(np.float128)
-                        ms = np.where(pix_map['valid'][start : start + hist.shape[0]])
-                        pix_map['n']['v'][start : start + hist.shape[0], varno][ms] = ns[ms] / counts_perpix.astype(np.float128)[ms]
+                        if varno not in initialised_counts :
+                            print '\n Setting count fractions for', d['name']+"'s", vars[varno]['name'], 'with the input values. In the range', start, start + hist.shape[0]
+                            ns = d['counts']['value'][v].astype(np.float128)
+                            ms = np.where(pix_map['valid'][start : start + hist.shape[0]])
+                            pix_map['n']['v'][start : start + hist.shape[0], varno][ms] = ns[ms] / counts_perpix.astype(np.float128)[ms]
+                            
+                            initialised_counts.append(varno)
                         
                     if d['counts']['update'] :
+                        print '\n will update the count fractions for', d['name']
                         pix_map['n']['up'][start : start + hist.shape[0], :] = True
             
             start += hist.shape[0]
 
+        print '\n masking the offsets, gains and counts for invalid pixels...'
         pix_map['mu']['up'][np.where(pix_map['valid'] == False)]      = False
         pix_map['g']['up'][np.where(pix_map['valid'] == False)]       = False
         pix_map['n']['up'][np.where(pix_map['valid'] == False)[0], :] = False
@@ -263,11 +294,20 @@ class Histograms():
                 print '\n setting', vars[v]['name'], 'var number',v,'to the input value'
                 Xs[v]['v'][:]  = vars[v]['function']['value'].astype(np.float128)
             
-            if vars[v]['function'].has_key('adus') :
+            if vars[v]['function'].has_key('adus') and vars[v]['function']['update']:
                 print '\n applying the adu mask of', vars[v]['name'], 'var number',v,'to the input value'
                 Xs[v]['up'][:]  = vars[v]['function']['adus']
+            
+            elif not vars[v]['function']['update']:
+                print '\n will not update ', vars[v]['name']
+                Xs[v]['up'][:]  = False
+                    
             else :
+                print '\n will update all adu values that have signal for', vars[v]['name']
                 Xs[v]['up'][:]  = True
+            
+            Xs[v]['name'] = vars[v]['name']
+            Xs[v]['type'] = vars[v]['type']
         
         return pix_map, Xs
 
@@ -302,6 +342,8 @@ class Histograms():
             if d['counts']['value'] is None :
                 # which var number is this count ?
                 varno = np.where( [id(var) == id(d['vars'][0]) for var in vars] )[0][0]
+                print '\n setting the count fractions for', d['name'], 'to 1. In range:', start, start + hist.shape[0]
+                print ' for variable', vars[varno]['name']
                 pix_map['n']['v'][start : start + hist.shape[0], varno].fill(1.)
             
             start += hist.shape[0]
@@ -315,14 +357,14 @@ class Histograms():
 
     def unshift_ungain(self, pix_map):
         if rank == 0 : print '\n calcuating the unshifted and ungained histograms...'
-        i = np.arange(pix_map['hist'].shape[1])
+        i = np.arange(pix_map['hist'].shape[1]).astype(np.float)
         M = float(pix_map['hist'].shape[0])
         
         for m, p in enumerate(pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
              
             if p['valid'] :
-                pix_map[m]['hist_cor'][:] = np.interp((i + p['mu']['v'])/p['g']['v'], i, p['hist']) / p['g']['v'] 
+                pix_map[m]['hist_cor'][:] = np.interp(i/p['g']['v'] + p['mu']['v'], i, p['hist'].astype(np.float64), left=0.0, right=0.0) / p['g']['v'] 
         return pix_map
     
     def pixel_multiplicity(self, pix_map):
@@ -338,7 +380,7 @@ class Histograms():
 
     def pixel_errors(self, Xs, pix_map, prob_tol = 1.0e-10):
         if rank == 0 : print '\n calcuating the log(likelihood) error for each pixel...'
-        i = np.arange(pix_map['hist'].shape[1])
+        i = np.arange(pix_map['hist'].shape[1]).astype(np.float)
         M = float(pix_map['hist'].shape[0])
         
         for m, p in enumerate(pix_map):
@@ -350,7 +392,7 @@ class Histograms():
                 
                 # evaluate the shifted gained probability function
                 f = np.sum( Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
-                f = np.interp(i*p['g']['v'] - p['mu']['v'], i, f.astype(np.float64)) * p['g']['v'] 
+                f = np.interp(i*p['g']['v'] - p['mu']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
                 
                 # sum the log liklihood errors for this pixel
                 e  = p['hist'][Is] * np.log(prob_tol + f[Is])
@@ -363,15 +405,141 @@ class Histograms():
                 pix_map[m]['e'] = 0.0
         
         return pix_map
+
+    def hist_fit(self, p, Xs):
+        i = np.arange(p['hist'].shape[0]).astype(np.float)
+        f = np.sum( Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
+        f = np.interp((i - p['mu']['v'])*p['g']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
+        f *= np.sum(p['hist'])
+        return f
         
-    def update_counts(self):
-        pass
+    def update_counts(self, pix_map):
+        """
+        """
+        for m, p in enumerate(pix_map):
+            pass
+
     def update_gain_offsets(self):
         pass
     def update_Xs(self):
         pass
-    def show(self):
-        pass
+    
+    def gather_pix_map(self):
+        """
+        Gather the results from everyone
+        """
+        if rank == 0 : print '\n gathering the pixel maps from everyone...'
+        comm.barrier()
+        self.pix_map = comm.gather(self.pix_map, root=0)
+        
+        # self.pix_map is now None for all the workers
+        # and a list of numpy arrays of dtype self.dt_pm
+        # we just need to concatenate everything...
+        
+        if rank == 0 :
+            self.pix_map = np.concatenate( tuple(self.pix_map) )
+            print ' recieved the pixel map of shape:', self.pix_map.shape
+
+    def show(self, dname = None):
+        if rank != 0 :
+            return 
+        
+        if dname is None :
+            pixels       = self.pix_map['pix']
+            pixels_valid = np.where(self.pix_map['valid'])[0]
+            dataname = 'all'
+        else :
+            for d in self.datas:
+                if d['name'] == dname :
+                    pixels = d['histograms']
+                    pixels_valid = np.where(self.pix_map['valid'][pixels])
+                    pixels_valid = pixels[pixels_valid]
+            dataname = dname
+        
+        #errors   = self.result['error vs iter']
+        # get the sum of the unshifted and ungained histograms
+        total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
+        hist_proj    = np.sum(self.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
+         
+        mus_name  = dataname + ' offset'
+        gs_name   = dataname + ' gain'
+        p_errors  = self.pix_map['e'][pixels]
+        m_sort    = np.argsort(p_errors)
+        mus       = self.pix_map['mu']['v'][pixels]
+        gs        = self.pix_map['g']['v'][pixels]
+        hists     = self.pix_map['hist'][pixels]
+        hists_cor = self.pix_map['hist_cor'][pixels]
+        
+        import pyqtgraph as pg
+        import PyQt4.QtGui
+        import PyQt4.QtCore
+        app = PyQt4.QtGui.QApplication([])
+        win = pg.GraphicsWindow(title="results")
+        pg.setConfigOptions(antialias=True)
+        
+        # show f and the mu values
+        ns     = self.pix_map['n']['v'][pixels_valid]
+        counts = np.sum(self.pix_map['hist'][pixels_valid], axis=-1)
+        total_counts = np.sum(counts)
+        
+        print ns.shape
+        fi   = lambda f: self.Xs['v'][i] * np.sum(ns[:, i] * counts) / float(total_counts)
+        ftot = np.sum([fi(i) for i in range(self.Xs.shape[0])], axis=0) 
+
+        Xplot = win.addPlot(title='functions')
+        Xplot.plot(y = hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        f_tot = np.zeros_like(self.Xs['v'][0])
+        for i in range(self.Xs.shape[0]):
+            Xplot.plot(y = fi(i) + 1.0e-10, pen=(i, len(self.Xs)+1), width = 10)
+        Xplot.plot(y = ftot + 1.0e-10, pen=(len(self.Xs), len(self.Xs)+1), width = 10)
+        
+        # now plot the histograms
+        m      = 0
+        title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
+        hplot  = win.addPlot(title = title)
+        curve_his = hplot.plot(hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        curve_fit = hplot.plot(self.hist_fit(self.pix_map[pixels][m], self.Xs), pen = (0, 255, 0))
+        hplot.setXLink('f')
+        def replot():
+            m = hline.value()
+            m = m_sort[m]
+            title = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
+            hplot.setTitle(title)
+            curve_his.setData(hists[m])
+            curve_fit.setData(self.hist_fit(self.pix_map[pixels][m], self.Xs))
+        
+        p_error_plot = win.addPlot(title='pixel errors', name = 'p_errors')
+        p_error_plot.plot(p_errors[m_sort], pen=(255, 255, 255))
+        p_error_plot.setXLink('mus')
+
+        hline = pg.InfiniteLine(angle=90, movable=True, bounds = [0, mus.shape[0]-1])
+        #hline.sigPositionChangeFinished.connect(replot)
+        hline.sigPositionChanged.connect(replot)
+        p_error_plot.addItem(hline)
+        
+        win.nextRow()
+        
+        muplot = win.addPlot(title=mus_name, name = 'mus')
+        muplot.plot(mus[m_sort],  pen=(0, 255, 0))
+        
+        gplot = win.addPlot(title=gs_name, name = 'gs')
+        gplot.plot(gs[m_sort],  pen=(0, 255, 0))
+        gplot.setXLink('mus')
+        
+        #p4 = win.addPlot(title="log likelihood error", y = errors)
+        #p4.showGrid(x=True, y=True) 
+
+        win.nextRow()
+
+        counts = np.sum(self.pix_map['hist'][pixels], axis=-1)
+        ns     = self.pix_map['n']['v'][pixels]
+        cplots = []
+        for c in range(self.Xs.shape[0]):
+            cplots.append(win.addPlot(title=self.Xs[c]['name'] + ' counts: ' + str(int(np.sum(counts * ns[:, c]))), name = self.Xs[c]['name']))
+            cplots[-1].plot(ns[m_sort][:, c],  pen=(c, self.Xs.shape[0]+1))
+            cplots[-1].setXLink('mus')
+
+        sys.exit(app.exec_())
 
 def chunkIt(seq, num):
     splits = np.mgrid[0:len(seq):(num+1)*1J].astype(np.int)
