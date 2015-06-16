@@ -413,11 +413,34 @@ class Histograms():
         f *= np.sum(p['hist'])
         return f
         
-    def update_counts(self, pix_map):
+    def update_counts(self):
         """
         """
-        for m, p in enumerate(pix_map):
-            pass
+        for m, p in enumerate(self.pix_map):
+            print 'checking pixel', m, p['n']['up'] 
+            if np.any(p['n']['up']):
+                hgm = p['hist_cor']
+                
+                # we don't need the zeros...
+                Is  = np.where(hgm >= 1)[0]
+                hgm = hgm[Is]
+                vs  = np.where(p['n']['up'])[0]
+                Xv2 = self.Xs['v'][:, Is]
+                Xv2 = Xv2[vs]
+                ns0 = p['n']['v'][vs]
+                
+                def fun(ns):
+                    ns2 = ns / np.sum(ns)
+                    error = - np.sum( hgm * np.log( np.sum( ns2[:, np.newaxis] * Xv2, axis=0) + 1.0e-10)) - p['m']
+                    return error
+                
+                bounds = []
+                for v in range(vs):
+                    bounds.append( (0.0, 1.0) )
+                
+                res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
+                self.pix_map['n']['v'][m][vs][:] = res.x / np.sum(res.x) 
+                print 'updating pixel',m , res.x/ np.sum(res.x), self.pix_map['n']['v'][m][vs][:]
 
     def update_gain_offsets(self):
         pass

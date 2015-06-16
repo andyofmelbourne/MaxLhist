@@ -110,7 +110,7 @@ if rank == 0 :
             'vars'       : [background, sPhoton], 
             'offset'     : {'update': False, 'value' : mus},
             'gain'       : {'update': False, 'value' : gs},
-            'counts'     : {'update': False, 'value' : counts},
+            'counts'     : {'update': True, 'value' : None},
             'comment'    : 'testing the X update'
             }
 else :
@@ -120,5 +120,6 @@ else :
 #---------
 H = MaxLhist_MPI.Histograms([data2, data])
 
+H.update_counts()
 H.gather_pix_map()
 H.show()
