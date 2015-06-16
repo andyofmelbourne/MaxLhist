@@ -14,7 +14,7 @@ size = comm.Get_size()
 if rank == 0 :
     # test data
     M = 500
-    N = 1000
+    N = 2000
     I = 250
 
     processes = 4
@@ -30,7 +30,7 @@ if rank == 0 :
     # 2 random variables
     #-------------------
     hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                    pos = [100, 130], sigma_mu = 100., sigma_g = 0.1, \
+                                                    pos = [100, 130], sigma_mu = 20., sigma_g = 0.1, \
                                                     mus=None, ns=None, gs=None, processes = processes)
 
 
@@ -118,8 +118,15 @@ else :
 
 # Retrieve
 #---------
-H = MaxLhist_MPI.Histograms([data2, data])
+H = MaxLhist_MPI.Histograms([data])
 
 H.update_counts()
 H.gather_pix_map()
+
+if rank == 0 :
+    pix = H.datas[0]['histograms']
+    print 'fidelity ns :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
+    #for m in range(counts.shape[1]) :
+        #print m, ns[0, m], ns[1, m]
+
 H.show()

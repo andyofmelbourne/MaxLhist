@@ -346,6 +346,11 @@ class Histograms():
                 print ' for variable', vars[varno]['name']
                 pix_map['n']['v'][start : start + hist.shape[0], varno].fill(1.)
             
+                print '\n will update the count fractions for', d['name'], '. In range:', start, start + hist.shape[0]
+                print ' for variable', vars[varno]['name']
+                
+                print '\n will update the count fractions for', d['name'], '. In range:', start, start + hist.shape[0]
+                pix_map['n']['up'][start : start + hist.shape[0], :] = True
             start += hist.shape[0]
 
         # the adu distributions
@@ -417,12 +422,11 @@ class Histograms():
         """
         """
         for m, p in enumerate(self.pix_map):
-            print 'checking pixel', m, p['n']['up'] 
             if np.any(p['n']['up']):
                 hgm = p['hist_cor']
                 
                 # we don't need the zeros...
-                Is  = np.where(hgm >= 1)[0]
+                Is  = np.where(hgm > 0)[0]
                 hgm = hgm[Is]
                 vs  = np.where(p['n']['up'])[0]
                 Xv2 = self.Xs['v'][:, Is]
@@ -435,12 +439,12 @@ class Histograms():
                     return error
                 
                 bounds = []
-                for v in range(vs):
+                for v in vs:
                     bounds.append( (0.0, 1.0) )
                 
                 res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
-                self.pix_map['n']['v'][m][vs][:] = res.x / np.sum(res.x) 
-                print 'updating pixel',m , res.x/ np.sum(res.x), self.pix_map['n']['v'][m][vs][:]
+                self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
+                #print 'updating pixel', p['pix'], res.x/ np.sum(res.x), self.pix_map['n']['v'][m][vs][:], rank, np.sum(p['hist_cor']), np.sum(p['hist'])
 
     def update_gain_offsets(self):
         pass
@@ -451,8 +455,8 @@ class Histograms():
         """
         Gather the results from everyone
         """
-        if rank == 0 : print '\n gathering the pixel maps from everyone...'
         comm.barrier()
+        if rank == 0 : print '\n gathering the pixel maps from everyone...'
         self.pix_map = comm.gather(self.pix_map, root=0)
         
         # self.pix_map is now None for all the workers
