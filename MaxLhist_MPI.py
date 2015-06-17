@@ -446,8 +446,85 @@ class Histograms():
                 self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
                 #print 'updating pixel', p['pix'], res.x/ np.sum(res.x), self.pix_map['n']['v'][m][vs][:], rank, np.sum(p['hist_cor']), np.sum(p['hist'])
 
-    def update_gain_offsets(self):
-        pass
+    def update_gain_offsets(self, quadfit=False):
+        I       = self.pix_map['hist'].shape[1]
+        i       = np.arange(I).astype(np.float)
+        fftfreq = I * np.fft.fftfreq(I)
+        
+        for m, p in enumerate(self.pix_map):
+            if not p['valid']:
+                continue
+            
+            h_hat = np.array(np.fft.rfft(p['hist'].astype(np.float64)))
+            
+            def error_quadfit_fun(g, return_mu = False):
+                f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
+                f = np.interp(i*g, i, f.astype(np.float64), left=0.0, right=0.0) * g 
+                f_hat = np.fft.rfft(np.log(f + 1.0e-10))
+                
+                cor = np.fft.irfft( np.conj(f_hat) * h_hat, I )
+                
+                # quadfit
+                #--------
+                mu_0     = np.argmax(cor)
+                cor_max0 = cor[mu_0]
+                
+                # map to shift coord
+                mus_0 = np.array([mu_0 - 1, mu_0, mu_0 + 1]) % cor.shape[0]
+                mus_t = fftfreq[mus_0]
+                vs    = cor[mus_0]
+                poly  = np.polyfit(mus_t, vs, 2)
+                # evaluate the new arg maximum 
+                mu      = - poly[1] / (2. * poly[0])
+                if (mu > mus_t[0]) and (mu < mus_t[-1]) and (poly[0] < 0) :
+                    cor_max = poly[0] * mu**2 + poly[1] * mu + poly[2]
+                else :
+                    print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape, poly, vs
+                    mu      = fftfreq[mu_0]
+                    cor_max = cor_max0
+                #--------
+                
+                # keep mu, which we get for free kind of
+                if return_mu :
+                    return -cor_max, mu
+                else :
+                    return -cor_max
+            
+            def error_fun(g, return_mu = False):
+                f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
+                f = np.interp(i*g, i, f.astype(np.float64), left=0.0, right=0.0) * g 
+                f_hat = np.fft.rfft(np.log(f + 1.0e-10))
+                
+                cor = np.fft.irfft( np.conj(f_hat) * h_hat, I )
+                
+                # keep mu, which we get for free kind of
+                if return_mu :
+                    mu = np.argmax(cor)
+                    mu = fftfreq[mu]
+                    return -np.max(cor), float(mu)
+                else :
+                    return -np.max(cor)
+
+            if quadfit :
+                errorf = error_quadfit_fun
+            else :
+                errorf = error_fun
+
+            if p['mu']['up'] and p['g']['up']:
+        
+                res   = scipy.optimize.minimize_scalar(errorf, method='bounded', bounds=(0.5, 1.5))
+                g     = res.x
+                e, mu = errorf(g, True)
+            
+            elif p['mu']['up'] and (not p['g']['up']):
+                g     = p['g']['v']
+                e, mu = errorf(g, True)
+            
+            self.pix_map[m]['mu']['v'] = mu
+            self.pix_map[m]['g']['v']  = g
+
+        self.unshift_ungain(self.pix_map)
+    
     def update_Xs(self):
         pass
     

@@ -13,7 +13,7 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 500
+    M = 100
     N = 2000
     I = 250
 
@@ -30,7 +30,7 @@ if rank == 0 :
     # 2 random variables
     #-------------------
     hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                    pos = [100, 130], sigma_mu = 20., sigma_g = 0.1, \
+                                                    pos = [100, 130], sigma_mu = 20., sigma_g = 0.0, \
                                                     mus=None, ns=None, gs=None, processes = processes)
 
 
@@ -108,9 +108,9 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': False, 'value' : mus},
-            'gain'       : {'update': False, 'value' : gs},
-            'counts'     : {'update': True, 'value' : None},
+            'offset'     : {'update': True, 'value' : None},
+            'gain'       : {'update': False, 'value' : None},
+            'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
 else :
@@ -120,13 +120,14 @@ else :
 #---------
 H = MaxLhist_MPI.Histograms([data])
 
-H.update_counts()
+#H.update_counts()
+H.update_gain_offsets(quadfit=True)
 H.gather_pix_map()
 
 if rank == 0 :
     pix = H.datas[0]['histograms']
-    print 'fidelity ns :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
-    #for m in range(counts.shape[1]) :
-        #print m, ns[0, m], ns[1, m]
+    print 'fidelity ns     :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
+    print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
+    print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
 
-H.show()
+#H.show()
