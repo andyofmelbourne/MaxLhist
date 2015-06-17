@@ -82,12 +82,12 @@ class Histograms():
             self.Xs      = None
             self.pix_map = None
         
-        if rank == 0 : print '\n broadcasting the Xs to everyone...'
         comm.barrier()
+        if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
         
-        if rank == 0 : print '\n scattering the pixel maps to everyone...'
         comm.barrier()
+        if rank == 0 : print '\n scattering the pixel maps to everyone...'
         self.pix_map = comm.scatter(self.pix_map, root=0)
 
         self.pix_map = self.unshift_ungain(self.pix_map)
@@ -444,7 +444,6 @@ class Histograms():
                 
                 res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
                 self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
-                #print 'updating pixel', p['pix'], res.x/ np.sum(res.x), self.pix_map['n']['v'][m][vs][:], rank, np.sum(p['hist_cor']), np.sum(p['hist'])
 
     def update_gain_offsets(self, quadfit=False):
         I       = self.pix_map['hist'].shape[1]
@@ -460,7 +459,7 @@ class Histograms():
             def error_quadfit_fun(g, return_mu = False):
                 f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
                 f = np.interp(i*g, i, f.astype(np.float64), left=0.0, right=0.0) * g 
-                f_hat = np.fft.rfft(np.log(f + 1.0e-10))
+                f_hat = np.fft.rfft(np.log(f + 1.0e-10) + p['m'])
                 
                 cor = np.fft.irfft( np.conj(f_hat) * h_hat, I )
                 
@@ -526,6 +525,12 @@ class Histograms():
         self.unshift_ungain(self.pix_map)
     
     def update_Xs(self):
+        # first get this working on one cpu: then
+        # I want
+        # np.sum(p['hist_cor'][:, my_adu_range], axis=0) we can just do a reduce for this
+        # all p['n'] this is an allgather operation
+        # np.sum(counts[m] * p['n']['v'][0, :]) this is a reduce
+        comm.barrier()
         pass
     
     def gather_pix_map(self):
@@ -535,10 +540,6 @@ class Histograms():
         comm.barrier()
         if rank == 0 : print '\n gathering the pixel maps from everyone...'
         self.pix_map = comm.gather(self.pix_map, root=0)
-        
-        # self.pix_map is now None for all the workers
-        # and a list of numpy arrays of dtype self.dt_pm
-        # we just need to concatenate everything...
         
         if rank == 0 :
             self.pix_map = np.concatenate( tuple(self.pix_map) )

@@ -243,8 +243,7 @@ where $\otimes$ is almost a convolution. If $h$ and $f$ are real (which they are
 \end{align}  
 so it is actually the cross-correlation of $h$ and $f$ (when $h$ and $f$ are real). Once $g_m$ has been solved by minimising the above equation. Then we can find $\mu_m$:
 \begin{align}
-   \mu_m g_m &= \argmax\mathcal{F}^{-1}\left[ \hat{h}^m_i \times \mathcal{F}[\ln(f^m(g_m i))]^* \right] \\
-   \therefore \mu_m &= \argmax\mathcal{F}^{-1}\left[ \hat{h}^m_i \times \mathcal{F}[\ln(f^m(g_m i))]^* \right] / g_m
+   \mu_m &= \argmax\mathcal{F}^{-1}\left[ \hat{h}^m_i \times \mathcal{F}[\ln(f^m(g_m i))]^* \right]
 \end{align}  
 We found that fitting a quadratic to the above equation for $i = i_{i_0-1}, i_{i_0}, i_{i_0+1}$ where $i_0$ is the solution, then fitting the maximum of that provides good results. 
 So, once the optimal $g_m$ is found, then $\mu_m$ is an automatic result. Note that simple linear interpolation, followed by normalisation, can be used to evaluate $f^m(g_m i)$.  

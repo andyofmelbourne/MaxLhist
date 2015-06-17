@@ -30,7 +30,7 @@ if rank == 0 :
     # 2 random variables
     #-------------------
     hists, mus, gs, ns, Xv = fm.forward_model_nvars(I=I, M=M, N=N, V=2, sigmas = [5., 7.], \
-                                                    pos = [100, 130], sigma_mu = 20., sigma_g = 0.0, \
+                                                    pos = [100, 130], sigma_mu = 20., sigma_g = 0.2, \
                                                     mus=None, ns=None, gs=None, processes = processes)
 
 
@@ -109,7 +109,7 @@ if rank == 0 :
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
             'offset'     : {'update': True, 'value' : None},
-            'gain'       : {'update': False, 'value' : None},
+            'gain'       : {'update': True, 'value' : None},
             'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
