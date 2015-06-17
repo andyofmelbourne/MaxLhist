@@ -357,7 +357,9 @@ class Histograms():
         for v in range(len(vars)) :
             if vars[v]['function']['value'] is None :
                 print '\n setting', vars[v]['name'],' to the sum of the histograms'
-                Xs[v]['v'] = f 
+                f = np.sum(pix_map['hist'], axis=0).astype(np.float64)
+                f = f / np.sum(f)
+                Xs[v]['v'] = f
         return pix_map, Xs
 
     def unshift_ungain(self, pix_map):
@@ -454,6 +456,9 @@ class Histograms():
             if not p['valid']:
                 continue
             
+            if (not p['mu']['up']) and (not p['g']['up']):
+                continue
+            
             h_hat = np.array(np.fft.rfft(p['hist'].astype(np.float64)))
             
             def error_quadfit_fun(g, return_mu = False):
@@ -531,8 +536,41 @@ class Histograms():
         # all p['n'] this is an allgather operation
         # np.sum(counts[m] * p['n']['v'][0, :]) this is a reduce
         comm.barrier()
-        pass
-    
+        if rank == 0 : print '\n updating the Xs...'
+        
+        I  = self.Xs[0]['v'].shape[0] 
+        V  = len(self.Xs)
+        up = self.Xs['up']
+        Xs = self.Xs['v']
+        valid_pix    = np.where(self.pix_map['valid'])[0]
+        
+        hist_proj    = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=0) / float(total_counts)
+        total_counts = np.sum(hist_proj)
+        hist_proj    = hist_proj / float(total_counts)
+        
+        for i in range(I):
+            if hist_proj[i] == 0.0 :
+                if rank == 0 : print ' no counts at adu value', i,'skipping'
+                continue
+            
+            vs_up  = np.where(up[:, i])[0]
+            vs_nup = np.where(up[:, i] * (Xs[:, i] > 0.0))[0]
+            
+            if len(vs_up) == 0 :
+                if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
+                continue
+            
+            # if we only have one var to update 
+            # and it's the only non zero var
+            if (len(vs) == 1) and (vs[0] not in vs_nup) :
+                if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
+                
+                self.Xs['v'][vs[0], i] = np.sum(self.pix_map[valid_pix]['hist_cor'][i]) / float(total_counts)
+            
+        comm.barrier()
+        if rank == 0 : print '\n broadcasting the Xs to everyone...'
+        self.Xs = comm.bcast(self.Xs, root=0)
+
     def gather_pix_map(self):
         """
         Gather the results from everyone

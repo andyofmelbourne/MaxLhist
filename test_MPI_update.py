@@ -74,8 +74,8 @@ if rank == 0 :
     background = {
             'name'      : 'electronic noise',
             'type'      : 'random variable',
-            #'function'  : {'update': True, 'value' : None},
-            'function'  : {'update': False, 'value' : Xv[0]},
+            'function'  : {'update': True, 'value' : None},
+            #'function'  : {'update': False, 'value' : Xv[0]},
             }
 
     sPhoton = {
@@ -108,8 +108,8 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': True, 'value' : None},
-            'gain'       : {'update': True, 'value' : None},
+            'offset'     : {'update': False, 'value' : mus},
+            'gain'       : {'update': False, 'value' : gs},
             'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
@@ -118,7 +118,7 @@ else :
 
 # Retrieve
 #---------
-H = MaxLhist_MPI.Histograms([data])
+H = MaxLhist_MPI.Histograms([data2])
 
 #H.update_counts()
 H.update_gain_offsets(quadfit=True)
@@ -129,5 +129,8 @@ if rank == 0 :
     print 'fidelity ns     :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
     print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
     print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
-
+    
+    for v in Xv :
+        for i in range(len(H.Xs)) :
+            print 'fidelity ', H.Xs[i]['name'], ' Xv ', np.sum((H.Xs[i]['v'] - Xv[i])**2)/np.sum(Xv[i]**2)
 #H.show()
