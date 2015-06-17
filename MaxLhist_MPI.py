@@ -359,7 +359,7 @@ class Histograms():
                 print '\n setting', vars[v]['name'],' to the sum of the histograms'
                 f = np.sum(pix_map['hist'], axis=0).astype(np.float64)
                 f = f / np.sum(f)
-                Xs[v]['v'] = f
+                Xs[v]['v'][:] = f
         return pix_map, Xs
 
     def unshift_ungain(self, pix_map):
@@ -544,29 +544,40 @@ class Histograms():
         Xs = self.Xs['v']
         valid_pix    = np.where(self.pix_map['valid'])[0]
         
-        hist_proj    = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=0) / float(total_counts)
+        hist_proj    = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=0) 
         total_counts = np.sum(hist_proj)
         hist_proj    = hist_proj / float(total_counts)
         
         for i in range(I):
-            if hist_proj[i] == 0.0 :
-                if rank == 0 : print ' no counts at adu value', i,'skipping'
-                continue
+            vs_up      = np.where(up[:, i])[0]
+            vs_nup     = np.where(up[:, i] * (Xs[:, i] > 0.0))[0]
+
+            nonzero = Xs[:, i] > 0.0
             
-            vs_up  = np.where(up[:, i])[0]
-            vs_nup = np.where(up[:, i] * (Xs[:, i] > 0.0))[0]
-            
-            if len(vs_up) == 0 :
+            if np.sum(up[:, 1]) == 0 :
                 if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
+                continue
+
+            if hist_proj[i] == 0.0 :
+                if rank == 0 : print ' no counts at adu value', i,'setting to zero'
+                for v in vs_up:
+                    self.Xs['v'][v, i] = 0.0
                 continue
             
             # if we only have one var to update 
             # and it's the only non zero var
-            if (len(vs) == 1) and (vs[0] not in vs_nup) :
+            if np.sum(up[:, i]) == 1 and (up[:, i] | nonzero) == up[:,i] :
                 if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
                 
-                self.Xs['v'][vs[0], i] = np.sum(self.pix_map[valid_pix]['hist_cor'][i]) / float(total_counts)
+                self.Xs['v'][vs_up[0], i] = hist_proj[i]
             
+            # if we only have one var to update 
+            # and there are other vars
+            if np.sum(up[:, i]) == 1 and (up[:, i] | nonzero) == up[:,i] :
+                if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
+                
+                self.Xs['v'][vs_up[0], i] = hist_proj[i]
+
         comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
@@ -690,6 +701,34 @@ def chunkIt(seq, num):
     for i in range(splits.shape[0]-1):
         out.append(seq[splits[i]:splits[i+1]])
     return out
+
+def grid_condition_boundaries(err, A, X, b, bounds):
+    """
+    find the minimum of err(X) such that:
+    A . X = b
+    bounds[i][0] <= Xi <= bounds[i][1]
+    by grid searching.
+    
+    -set X0 = b - Aj . Xj , j>0
+    -make a grid of values for Xj in the bounds
+    -manually evaluate that the bounds are satisfied at each grid point
+    -find minimum of err at these points
+    -then zoom and repeat
+    """
+    # make the domain:
+    N = 100
+    dom = []
+    for b in bounds[1 :]:
+        dom.append( np.linspace(b[0], b[1], N, endpoint=True) )
+    
+    # make the grid:
+    grid = np.meshgrid(*dom, copy=False, indexing='ij')
+    
+    mask = [] #np.zeros_like(grid, dtype=np.bool)
+    # evaluate the valid positions
+    pass
+    
+    
 
 
 def update_progress(progress):

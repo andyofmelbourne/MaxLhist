@@ -120,17 +120,18 @@ else :
 #---------
 H = MaxLhist_MPI.Histograms([data2])
 
-#H.update_counts()
+H.update_counts()
 H.update_gain_offsets(quadfit=True)
+H.update_Xs()
 H.gather_pix_map()
 
 if rank == 0 :
     pix = H.datas[0]['histograms']
-    print 'fidelity ns     :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
-    print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
-    print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
+    #print 'fidelity ns     :' , np.sum((ns[1:] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
+    #print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
+    #print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
     
     for v in Xv :
         for i in range(len(H.Xs)) :
             print 'fidelity ', H.Xs[i]['name'], ' Xv ', np.sum((H.Xs[i]['v'] - Xv[i])**2)/np.sum(Xv[i]**2)
-#H.show()
+H.show()
