@@ -424,7 +424,10 @@ class Histograms():
     def update_counts(self):
         """
         """
+        M = float(self.pix_map['hist'].shape[0])
         for m, p in enumerate(self.pix_map):
+            if rank == 0 : update_progress(float(m + 1) / M)
+            
             if np.any(p['n']['up']):
                 hgm = p['hist_cor']
                 
@@ -452,8 +455,11 @@ class Histograms():
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
         fftfreq = I * np.fft.fftfreq(I)
+        M = float(self.pix_map['hist'].shape[0])
         
         for m, p in enumerate(self.pix_map):
+            if rank == 0 : update_progress(float(m + 1) / M)
+            
             if not p['valid']:
                 continue
             
@@ -531,17 +537,6 @@ class Histograms():
         self.unshift_ungain(self.pix_map)
     
     def update_Xs(self, verb=False):
-        # first get this working on one cpu: then
-        # I want
-        # np.sum(p['hist_cor'][:, my_adu_range], axis=0) we can just do a reduce for this
-        # all p['n'] this is an allgather operation
-        # np.sum(counts[m] * p['n']['v'][0, :]) this is a reduce
-        #
-        # we always demand that:
-        # sum(Nm * fmi) = sum(h_cor_mi) --> sum(Nm / av_counts * fmi) = sum(h_cor_mi)/av_counts 
-        # the latter does not scale with N
-        # np.sum(counts * np.sum( ns2[:, np.newaxis] * Xv2, axis=0)) = hist_proj[i]
-        # np.sum(counts * np.sum( ns2[:, np.newaxis] * Xv2, axis=0)) = hist_proj[i]
         comm.barrier()
         if rank == 0 : print '\n updating the Xs...'
         
@@ -594,7 +589,13 @@ class Histograms():
         my_X                     = np.zeros_like(self.Xs['v'])
         my_X[:, self.adus[rank]] = self.Xs['v'][:, self.adus[rank]]
         
+        I = len(self.adus[rank])
+        count = 0
         for i in self.adus[rank]:
+            if rank == 0 : 
+                update_progress(float(count + 1) / I)
+                count += 1
+
             vs_up      = np.where(up[:, i])[0]
             vs_nup     = np.where(up[:, i] == False)[0]
             nonzero    = self.Xs['v'][:, i] > 0.0
