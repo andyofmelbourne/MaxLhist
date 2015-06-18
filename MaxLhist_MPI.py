@@ -44,6 +44,7 @@ class Histograms():
         
         comm.barrier()
         M, I, V = comm.bcast([M, I, V], root=0)
+        self.M, self.I, self.V = M, I, V
         
         # set the numpy dtypes
         #---------------------
@@ -77,10 +78,10 @@ class Histograms():
                 self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
                 start += Md
         else :
-            self.adus    = chunkIt(range(I), size-1)
-            self.pix_map = chunkIt(range(M), size-1)
             self.Xs      = None
             self.pix_map = None
+        
+        self.adus    = chunkIt(np.arange(I), size)
         
         comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
@@ -529,7 +530,7 @@ class Histograms():
 
         self.unshift_ungain(self.pix_map)
     
-    def update_Xs(self):
+    def update_Xs(self, verb=False):
         # first get this working on one cpu: then
         # I want
         # np.sum(p['hist_cor'][:, my_adu_range], axis=0) we can just do a reduce for this
@@ -545,68 +546,105 @@ class Histograms():
         if rank == 0 : print '\n updating the Xs...'
         
         I  = self.Xs[0]['v'].shape[0] 
-        V  = len(self.Xs)
         up = self.Xs['up']
         Xs = self.Xs['v']
-        valid_pix    = np.where(self.pix_map['valid'])[0]
+
+        # allgather valid pixels
+        valid_pix = self.pix_map['valid']
+        valid_pix = comm.allgather(valid_pix)
+        valid_pix = np.concatenate( tuple(valid_pix) )
+        valid_pix = np.where(valid_pix)[0]
+
+        # allgather pixel counts
+        my_valid = np.where(self.pix_map['valid'])[0]
+        counts   = np.sum(self.pix_map[my_valid]['hist_cor'], axis=1)
+        counts   = comm.allgather(counts)
+        counts   = np.concatenate( tuple(counts) )
         
-        counts       = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=1)
-        hist_cor     = self.pix_map['hist_cor'][valid_pix]
-        hist_proj    = np.sum(hist_cor, axis=0) 
-        total_counts = np.sum(hist_proj)
-        av_counts    = total_counts / float(len(valid_pix))
-        counts_n     = counts[:, np.newaxis] * self.pix_map['n']['v'][valid_pix]
-        ns           = self.pix_map['n']['v'][valid_pix]
+        total_counts = np.sum(counts)
         
-        for i in range(I):
+        # allgather count fractions
+        ns = self.pix_map['n']['v'][my_valid]
+        ns = comm.allgather(ns)
+        ns = np.concatenate( tuple(ns) )
+
+        counts_n = counts[:, np.newaxis] * ns
+
+        # get the hist_cor's for our adu's
+        hist_cor = []
+        for i in range(self.I):
+            rank_i = [np.any(self.adus[j] == i) for j in range(size)].index(True)
+            h      = comm.gather(self.pix_map['hist_cor'][my_valid, i], root = rank_i)
+            if h is not None :
+                h = np.concatenate( tuple(h) )
+            hist_cor.append(h)
+
+        hist_proj = []
+        for h in hist_cor:
+            if h is not None :
+                hist_proj.append(np.sum(h))
+            else :
+                hist_proj.append(None)
+
+
+        # grab hist_cor for our adu value from everyone
+        #hist_cor     = self.pix_map['hist_cor'][valid_pix]
+        #hist_proj    = np.sum(hist_cor, axis=0) 
+
+        my_X                     = np.zeros_like(self.Xs['v'])
+        my_X[:, self.adus[rank]] = self.Xs['v'][:, self.adus[rank]]
+        
+        for i in self.adus[rank]:
             vs_up      = np.where(up[:, i])[0]
             vs_nup     = np.where(up[:, i] == False)[0]
-            nonzero    = Xs[:, i] > 0.0
+            nonzero    = self.Xs['v'][:, i] > 0.0
             
+
             if np.sum(up[:, i]) == 0 :
-                #if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
+                if rank == 0 and verb : print ' no Xs to update at adu value', i,'skipping'
                 continue
 
             if hist_proj[i] == 0.0 :
-                #if rank == 0 : print ' no counts at adu value', i,'setting to zero'
+                if rank == 0 and verb : print ' no counts at adu value', i,'setting to zero'
                 for v in vs_up:
-                    self.Xs['v'][v, i] = 0.0
+                    my_X[v, i] = 0.0
                 continue
             
             # if we only have one var to update 
             # and it's the only non zero var
             if np.sum(up[:, i]) == 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
-                if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
-                self.Xs['v'][vs_up[0], i] = hist_proj[i] / total_counts
+                if rank == 0 and verb : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
+                my_X[vs_up[0], i] = hist_proj[i] / total_counts
             
             # if we only have one var to update 
             # and there are other vars that are nonzero
             if np.sum(up[:, i]) == 1 and np.any(nonzero[vs_nup]) :
-                if rank == 0 : print '\n only one X to update, but other vars are nonzero, at adu value', i
-                self.Xs['v'][vs_up[0], i]  = hist_proj[i] - np.sum(np.sum(counts_n[:, vs_nup], axis=0) * self.Xs['v'][vs_nup, i])
-                self.Xs['v'][vs_up[0], i] /= np.sum(counts_n[:, vs_up[0]])
+                if rank == 0 and verb : print '\n only one X to update, but other vars are nonzero, at adu value', i
+                my_X[vs_up[0], i]  = hist_proj[i] - np.sum(np.sum(counts_n[:, vs_nup], axis=0) * self.Xs['v'][vs_nup, i])
+                my_X[vs_up[0], i] /= np.sum(counts_n[:, vs_up[0]])
                 if self.Xs['v'][vs_up[0], i] < 0.0 :
-                    self.Xs['v'][vs_up[0], i] = 0.0
-                if rank == 0 : print ' setting to the sum of the residual corrected hist', self.Xs['v'][vs_up[0], i]
+                    my_X[vs_up[0], i] = 0.0
+                if rank == 0 and verb : print ' setting to the sum of the residual corrected hist', my_X[vs_up[0], i]
 
             # if we have more than one var to update
             # and they are the only vars
             if np.sum(up[:, i]) > 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
-                if rank == 0 : print ' more than one var to update and they are the only vars, at adu', i
+                if rank == 0 and verb : print ' more than one var to update and they are the only vars, at adu', i
                 A      = np.sum(counts_n[:, vs_up], axis=0)
                 b      = hist_proj[i]
                 bounds = [(0.0, 1.0) for v in range(len(vs_up))]
                 def err(xs):
-                    e = -np.sum( hist_cor[:, i] * np.log(np.sum(ns * xs[np.newaxis, :], axis=1) + 1.0e-10) )
+                    e = -np.sum( hist_cor[i] * np.log(np.sum(ns * xs[np.newaxis, :], axis=1) + 1.0e-10) )
                     return e
+
                 xs = grid_condition_boundaries(err, A, b, bounds, N=10, iters=10)
                 
-                self.Xs['v'][vs_up, i] = xs
-
-
+                my_X[vs_up, i] = xs
+        
         comm.barrier()
-        if rank == 0 : print '\n broadcasting the Xs to everyone...'
-        self.Xs = comm.bcast(self.Xs, root=0)
+        if rank == 0 : print '\n reducing the Xs to everyone...'
+        #self.Xs = comm.bcast(self.Xs, root=0)
+        self.Xs['v'][:] = comm.allreduce(my_X, op=MPI.SUM)
 
         self.pixel_errors(self.Xs, self.pix_map)
 
