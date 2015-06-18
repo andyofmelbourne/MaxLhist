@@ -33,7 +33,6 @@ size = comm.Get_size()
 
 
 class Histograms():
-
     def __init__(self, datas):
         # set the array dimensions
         #-------------------------

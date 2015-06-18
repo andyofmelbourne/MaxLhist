@@ -82,7 +82,7 @@ if rank == 0 :
             'name'      : 'single photon',
             'type'      : 'random variable',
             'function'  : {'update': True, 'value' : np.zeros((I), dtype=np.float128), \
-                           'smooth' : 0., 'adus' : range(0, I)},
+                           'smooth' : 0., 'adus' : range(100, 150)},
             #'function'  : {'update': False, 'value' : Xv[1]},
             }
 
