@@ -407,7 +407,6 @@ class Histograms():
                 pix_map[m]['e'] = - np.sum(e) - p['m']
                 if pix_map[m]['e'] < 0.0 :
                     print 'Error: pixel', p['pix'], 'has a negative log likelihood (prob > 1). sum(f)', np.sum(f)
-                    sys.exit()
             else :
                 pix_map[m]['e'] = 0.0
         
@@ -494,7 +493,7 @@ class Histograms():
                 if (mu > mus_t[0]) and (mu < mus_t[-1]) and (poly[0] < 0) :
                     cor_max = poly[0] * mu**2 + poly[1] * mu + poly[2]
                 else :
-                    print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape, poly, vs
+                    #print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape, poly, vs
                     mu      = fftfreq[mu_0]
                     cor_max = cor_max0
                 #--------
@@ -657,11 +656,12 @@ class Histograms():
             # and there are other vars that are nonzero
             if np.sum(up[:, i]) == 1 and np.any(nonzero[vs_nup]) :
                 if rank == 0 and verb : print '\n only one X to update, but other vars are nonzero, at adu value', i
-                my_X[vs_up[0], i]  = hist_proj[i] - np.sum(np.sum(counts_n[:, vs_nup], axis=0) * self.Xs['v'][vs_nup, i])
-                my_X[vs_up[0], i] /= np.sum(counts_n[:, vs_up[0]])
-                if self.Xs['v'][vs_up[0], i] < 0.0 :
-                    my_X[vs_up[0], i] = 0.0
-                if rank == 0 and verb : print ' setting to the sum of the residual corrected hist', my_X[vs_up[0], i]
+                if np.any(counts_n[:, vs_up[0]] > 0):
+                    my_X[vs_up[0], i]  = hist_proj[i] - np.sum(np.sum(counts_n[:, vs_nup], axis=0) * self.Xs['v'][vs_nup, i])
+                    my_X[vs_up[0], i] /= np.sum(counts_n[:, vs_up[0]])
+                    if self.Xs['v'][vs_up[0], i] < 0.0 :
+                        my_X[vs_up[0], i] = 0.0
+                    if rank == 0 and verb : print ' setting to the sum of the residual corrected hist', my_X[vs_up[0], i]
 
             # if we have more than one var to update
             # and they are the only vars
@@ -673,7 +673,7 @@ class Histograms():
                 def err(xs):
                     e = -np.sum( hist_cor[i] * np.log(np.sum(ns * xs[np.newaxis, :], axis=1) + 1.0e-10) )
                     return e
-
+                
                 xs = grid_condition_boundaries(err, A, b, bounds, N=10, iters=10)
                 
                 my_X[vs_up, i] = xs
@@ -849,6 +849,10 @@ def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
             grid_X = dom
 
         # evaluate X0 
+        if A[0] <= 0.0 :
+            print '\n Warning A[0] <= 0.0, setting to zero'
+            return [0.0 for i in range(len(A))]
+        
         X0  = (b - np.sum( [A[i+1] * grid_X[i] for i in range(0, len(A)-1)], axis=0)) / A[0]
 
         # evaluate the mask 
