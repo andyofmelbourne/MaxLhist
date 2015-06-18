@@ -74,16 +74,16 @@ if rank == 0 :
     background = {
             'name'      : 'electronic noise',
             'type'      : 'random variable',
-            'function'  : {'update': True, 'value' : None},
-            #'function'  : {'update': False, 'value' : Xv[0]},
+            #'function'  : {'update': True, 'value' : None},
+            'function'  : {'update': False, 'value' : Xv[0]},
             }
 
     sPhoton = {
             'name'      : 'single photon',
             'type'      : 'random variable',
-            'function'  : {'update': True, 'value' : np.zeros((I), dtype=np.float128), \
-                           'smooth' : 0., 'adus' : range(100, 150)},
-            #'function'  : {'update': False, 'value' : Xv[1]},
+            #'function'  : {'update': True, 'value' : np.zeros((I), dtype=np.float128), \
+            #               'smooth' : 0., 'adus' : range(100, 150)},
+            'function'  : {'update': False, 'value' : Xv[1]},
             }
 
     dPhoton = {
@@ -99,9 +99,9 @@ if rank == 0 :
             'name'       : 'dark run',
             'histograms' : hists2,
             'vars'       : [background], 
-            'offset'     : {'update': False, 'value' : mus2},
+            'offset'     : {'update': True, 'value' : None},
+            'gain'       : {'update': True, 'value' : None},
             'counts'     : {'update': False, 'value' : None},
-            'gain'       : {'update': False, 'value' : gs2},
             'comment'    : 'testing the X update'
             }
 
@@ -109,8 +109,8 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': False, 'value' : mus},
-            'gain'       : {'update': False, 'value' : gs},
+            'offset'     : {'update': True, 'value' : None},
+            'gain'       : {'update': True, 'value' : None},
             'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }

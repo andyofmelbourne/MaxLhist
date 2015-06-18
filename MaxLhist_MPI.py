@@ -423,7 +423,10 @@ class Histograms():
     def update_counts(self):
         """
         """
+        comm.barrier()
+        if rank == 0 : '\n updating the count fractions...'
         M = float(self.pix_map['hist'].shape[0])
+        
         for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
             
@@ -451,10 +454,12 @@ class Histograms():
                 self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
 
     def update_gain_offsets(self, quadfit=False):
+        comm.barrier()
+        if rank == 0 : '\n updating gain and offset values...'
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
         fftfreq = I * np.fft.fftfreq(I)
-        M = float(self.pix_map['hist'].shape[0])
+        M       = float(self.pix_map['hist'].shape[0])
         
         for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
@@ -521,7 +526,6 @@ class Histograms():
                 errorf = error_fun
 
             if p['mu']['up'] and p['g']['up']:
-        
                 res   = scipy.optimize.minimize_scalar(errorf, method='bounded', bounds=(0.5, 1.5))
                 g     = res.x
                 e, mu = errorf(g, True)
@@ -533,6 +537,39 @@ class Histograms():
             self.pix_map[m]['mu']['v'] = mu
             self.pix_map[m]['g']['v']  = g
 
+        # we need to ensure that sum mus = 0
+        #                        sum gs  = M
+        # pretty anoying -------------------
+        comm.barrier()
+        gs  = comm.gather(self.pix_map['g'], root=0)
+        if rank == 0 : gs  = np.concatenate( tuple(gs) )
+        
+        mus = comm.gather(self.pix_map['mu'], root=0)
+        if rank == 0 : mus = np.concatenate( tuple(mus) )
+        
+        if rank == 0 :
+            print '\n gathering gain and offsets for normalisation...'
+            i = np.where(mus['up'])
+            mus[i]['v'] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
+            mus = chunkIt(mus, size)
+            
+            i = np.where(gs['up'])
+            gs[i]['v'] = gs[i]['v'] / np.mean(gs[i]['v']) 
+            gs = chunkIt(gs, size)
+        
+        comm.barrier()
+        if rank == 0 : print ' scattering the new gain and offset values...'
+        gs = comm.scatter(gs, root=0)
+        i  = np.where(gs['up'])
+        self.pix_map['g'][i] = gs[i]
+
+        comm.barrier()
+        mus = comm.scatter(mus, root=0)
+        i   = np.where(mus['up'])
+        self.pix_map['mu'][i] = mus[i]
+        # ----------------------------------
+
+        comm.barrier()
         self.unshift_ungain(self.pix_map)
     
     def update_Xs(self, verb=False):
