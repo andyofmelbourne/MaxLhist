@@ -296,7 +296,7 @@ class Histograms():
             
             if vars[v]['function'].has_key('adus') and vars[v]['function']['update']:
                 print '\n applying the adu mask of', vars[v]['name'], 'var number',v,'to the input value'
-                Xs[v]['up'][:]  = vars[v]['function']['adus']
+                Xs[v]['up'][vars[v]['function']['adus']] = True
             
             elif not vars[v]['function']['update']:
                 print '\n will not update ', vars[v]['name']
@@ -551,22 +551,24 @@ class Histograms():
         valid_pix    = np.where(self.pix_map['valid'])[0]
         
         counts       = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=1)
-        hist_proj    = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=0) 
+        hist_cor     = self.pix_map['hist_cor'][valid_pix]
+        hist_proj    = np.sum(hist_cor, axis=0) 
         total_counts = np.sum(hist_proj)
         av_counts    = total_counts / float(len(valid_pix))
         counts_n     = counts[:, np.newaxis] * self.pix_map['n']['v'][valid_pix]
+        ns           = self.pix_map['n']['v'][valid_pix]
         
         for i in range(I):
             vs_up      = np.where(up[:, i])[0]
             vs_nup     = np.where(up[:, i] == False)[0]
             nonzero    = Xs[:, i] > 0.0
             
-            if np.sum(up[:, 1]) == 0 :
-                if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
+            if np.sum(up[:, i]) == 0 :
+                #if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
                 continue
 
             if hist_proj[i] == 0.0 :
-                if rank == 0 : print ' no counts at adu value', i,'setting to zero'
+                #if rank == 0 : print ' no counts at adu value', i,'setting to zero'
                 for v in vs_up:
                     self.Xs['v'][v, i] = 0.0
                 continue
@@ -587,9 +589,26 @@ class Histograms():
                     self.Xs['v'][vs_up[0], i] = 0.0
                 if rank == 0 : print ' setting to the sum of the residual corrected hist', self.Xs['v'][vs_up[0], i]
 
+            # if we have more than one var to update
+            # and they are the only vars
+            if np.sum(up[:, i]) > 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
+                if rank == 0 : print ' more than one var to update and they are the only vars, at adu', i
+                A      = np.sum(counts_n[:, vs_up], axis=0)
+                b      = hist_proj[i]
+                bounds = [(0.0, 1.0) for v in range(len(vs_up))]
+                def err(xs):
+                    e = -np.sum( hist_cor[:, i] * np.log(np.sum(ns * xs[np.newaxis, :], axis=1) + 1.0e-10) )
+                    return e
+                xs = grid_condition_boundaries(err, A, b, bounds, N=10, iters=10)
+                
+                self.Xs['v'][vs_up, i] = xs
+
+
         comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
+
+        self.pixel_errors(self.Xs, self.pix_map)
 
     def gather_pix_map(self):
         """
@@ -749,7 +768,10 @@ def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
                 steps.append(step)
         
         # make the grid:
-        grid_X = np.meshgrid(*dom, copy=False, indexing='ij')
+        if len(dom) > 1 :
+            grid_X = np.meshgrid(*dom, copy=False, indexing='ij')
+        else :
+            grid_X = dom
 
         # evaluate X0 
         X0  = (b - np.sum( [A[i+1] * grid_X[i] for i in range(0, len(A)-1)], axis=0)) / A[0]
@@ -765,7 +787,7 @@ def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
         errors = []
         for xs in zip(*[X.ravel() for X in grid_X]):
             if xs[-1]:
-                errors.append(err(xs[:-1]))
+                errors.append(err(np.array(xs[:-1])))
             else :
                 errors.append(np.inf)
 

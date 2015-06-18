@@ -13,7 +13,7 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 100
+    M = 1000
     N = 2000
     I = 250
 
@@ -81,8 +81,9 @@ if rank == 0 :
     sPhoton = {
             'name'      : 'single photon',
             'type'      : 'random variable',
-            #'function'  : {'update': True, 'value' : None, 'smooth' : 0.},
-            'function'  : {'update': False, 'value' : Xv[1]},
+            'function'  : {'update': True, 'value' : np.zeros((I), dtype=np.float128), \
+                           'smooth' : 0., 'adus' : range(0, I)},
+            #'function'  : {'update': False, 'value' : Xv[1]},
             }
 
     dPhoton = {
@@ -118,7 +119,7 @@ else :
 
 # Retrieve
 #---------
-H = MaxLhist_MPI.Histograms([data])
+H = MaxLhist_MPI.Histograms([data2, data])
 
 H.update_counts()
 H.update_gain_offsets(quadfit=True)
