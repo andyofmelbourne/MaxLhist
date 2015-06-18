@@ -535,6 +535,12 @@ class Histograms():
         # np.sum(p['hist_cor'][:, my_adu_range], axis=0) we can just do a reduce for this
         # all p['n'] this is an allgather operation
         # np.sum(counts[m] * p['n']['v'][0, :]) this is a reduce
+        #
+        # we always demand that:
+        # sum(Nm * fmi) = sum(h_cor_mi) --> sum(Nm / av_counts * fmi) = sum(h_cor_mi)/av_counts 
+        # the latter does not scale with N
+        # np.sum(counts * np.sum( ns2[:, np.newaxis] * Xv2, axis=0)) = hist_proj[i]
+        # np.sum(counts * np.sum( ns2[:, np.newaxis] * Xv2, axis=0)) = hist_proj[i]
         comm.barrier()
         if rank == 0 : print '\n updating the Xs...'
         
@@ -544,15 +550,16 @@ class Histograms():
         Xs = self.Xs['v']
         valid_pix    = np.where(self.pix_map['valid'])[0]
         
+        counts       = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=1)
         hist_proj    = np.sum(self.pix_map[valid_pix]['hist_cor'], axis=0) 
         total_counts = np.sum(hist_proj)
-        hist_proj    = hist_proj / float(total_counts)
+        av_counts    = total_counts / float(len(valid_pix))
+        counts_n     = counts[:, np.newaxis] * self.pix_map['n']['v'][valid_pix]
         
         for i in range(I):
             vs_up      = np.where(up[:, i])[0]
-            vs_nup     = np.where(up[:, i] * (Xs[:, i] > 0.0))[0]
-
-            nonzero = Xs[:, i] > 0.0
+            vs_nup     = np.where(up[:, i] == False)[0]
+            nonzero    = Xs[:, i] > 0.0
             
             if np.sum(up[:, 1]) == 0 :
                 if rank == 0 : print ' no Xs to update at adu value', i,'skipping'
@@ -566,17 +573,19 @@ class Histograms():
             
             # if we only have one var to update 
             # and it's the only non zero var
-            if np.sum(up[:, i]) == 1 and (up[:, i] | nonzero) == up[:,i] :
+            if np.sum(up[:, i]) == 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
                 if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
-                
-                self.Xs['v'][vs_up[0], i] = hist_proj[i]
+                self.Xs['v'][vs_up[0], i] = hist_proj[i] / total_counts
             
             # if we only have one var to update 
-            # and there are other vars
-            if np.sum(up[:, i]) == 1 and (up[:, i] | nonzero) == up[:,i] :
-                if rank == 0 : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
-                
-                self.Xs['v'][vs_up[0], i] = hist_proj[i]
+            # and there are other vars that are nonzero
+            if np.sum(up[:, i]) == 1 and np.any(nonzero[vs_nup]) :
+                if rank == 0 : print '\n only one X to update, but other vars are nonzero, at adu value', i
+                self.Xs['v'][vs_up[0], i]  = hist_proj[i] - np.sum(np.sum(counts_n[:, vs_nup], axis=0) * self.Xs['v'][vs_nup, i])
+                self.Xs['v'][vs_up[0], i] /= np.sum(counts_n[:, vs_up[0]])
+                if self.Xs['v'][vs_up[0], i] < 0.0 :
+                    self.Xs['v'][vs_up[0], i] = 0.0
+                if rank == 0 : print ' setting to the sum of the residual corrected hist', self.Xs['v'][vs_up[0], i]
 
         comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
@@ -636,7 +645,6 @@ class Histograms():
         counts = np.sum(self.pix_map['hist'][pixels_valid], axis=-1)
         total_counts = np.sum(counts)
         
-        print ns.shape
         fi   = lambda f: self.Xs['v'][i] * np.sum(ns[:, i] * counts) / float(total_counts)
         ftot = np.sum([fi(i) for i in range(self.Xs.shape[0])], axis=0) 
 
@@ -702,12 +710,18 @@ def chunkIt(seq, num):
         out.append(seq[splits[i]:splits[i+1]])
     return out
 
-def grid_condition_boundaries(err, A, X, b, bounds):
+def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
     """
     find the minimum of err(X) such that:
     A . X = b
     bounds[i][0] <= Xi <= bounds[i][1]
     by grid searching.
+
+    A = list or 1d array of length N
+    b = scalar
+    bounds = list (N) of tuples or lists (2) 
+    err must take an array of X values of length N
+    e.g. err(np.array([X0, X1, ... XN-1]))
     
     -set X0 = b - Aj . Xj , j>0
     -make a grid of values for Xj in the bounds
@@ -715,20 +729,50 @@ def grid_condition_boundaries(err, A, X, b, bounds):
     -find minimum of err at these points
     -then zoom and repeat
     """
-    # make the domain:
-    N = 100
-    dom = []
-    for b in bounds[1 :]:
-        dom.append( np.linspace(b[0], b[1], N, endpoint=True) )
-    
-    # make the grid:
-    grid = np.meshgrid(*dom, copy=False, indexing='ij')
-    
-    mask = [] #np.zeros_like(grid, dtype=np.bool)
-    # evaluate the valid positions
-    pass
-    
-    
+    # zoom
+    for n in range(iters):
+        if n == 0 :
+            dom   = []
+            steps = []
+            for bound in bounds[1 :]:
+                x, step = np.linspace(bound[0], bound[1], N, endpoint=True, retstep=True)
+                dom.append(x)
+                steps.append(step)
+        else :
+            # make the domain within the new bounds
+            steps_old = list(steps)
+            dom   = []
+            steps = []
+            for step_old, xmin, bound in zip(steps_old, X[1 :], bounds[1 :]):
+                x, step = np.linspace(max([xmin-step_old, bound[0]]), min([xmin+step_old, bound[1]]), N, endpoint=True, retstep=True)
+                dom.append(x)
+                steps.append(step)
+        
+        # make the grid:
+        grid_X = np.meshgrid(*dom, copy=False, indexing='ij')
+
+        # evaluate X0 
+        X0  = (b - np.sum( [A[i+1] * grid_X[i] for i in range(0, len(A)-1)], axis=0)) / A[0]
+
+        # evaluate the mask 
+        mask = (X0 > bounds[0][0]) * (X0 < bounds[0][1])
+        if not np.any(mask):
+            print 'Error: A . X not == b for any values inside the bounds...'
+
+        # this generates a list of N dimensional X coords [X0, X1, X2, ..., XN-1, M]
+        # and the mask
+        grid_X = [X0] + grid_X + [mask]
+        errors = []
+        for xs in zip(*[X.ravel() for X in grid_X]):
+            if xs[-1]:
+                errors.append(err(xs[:-1]))
+            else :
+                errors.append(np.inf)
+
+        i = np.argmin(errors)
+        i = np.unravel_index(i, dims=X0.shape)
+        X = [grid_X[j][i] for j in range(len(A))]
+    return X
 
 
 def update_progress(progress):

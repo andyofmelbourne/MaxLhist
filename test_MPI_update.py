@@ -118,7 +118,7 @@ else :
 
 # Retrieve
 #---------
-H = MaxLhist_MPI.Histograms([data2])
+H = MaxLhist_MPI.Histograms([data])
 
 H.update_counts()
 H.update_gain_offsets(quadfit=True)
