@@ -680,11 +680,14 @@ class Histograms():
         
         comm.barrier()
         if rank == 0 : print '\n reducing the Xs to everyone...'
-        #self.Xs = comm.bcast(self.Xs, root=0)
         self.Xs['v'][:] = comm.allreduce(my_X, op=MPI.SUM)
-
+        
+        # normalise
+        for v in range(len(self.Xs)):
+            self.Xs['v'][v][:] = self.Xs['v'][v][:] / np.sum(self.Xs['v'][v][:])
+        
         self.pixel_errors(self.Xs, self.pix_map)
-
+    
     def gather_pix_map(self):
         """
         Gather the results from everyone

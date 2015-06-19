@@ -13,7 +13,7 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 2000
+    M = 1000
     N = 1000
     I = 250
 
@@ -99,8 +99,8 @@ if rank == 0 :
             'name'       : 'dark run',
             'histograms' : hists2,
             'vars'       : [background], 
-            'offset'     : {'update': True, 'value' : None},
-            'gain'       : {'update': True, 'value' : None},
+            'offset'     : {'update': False, 'value' : mus2},
+            'gain'       : {'update': False, 'value' : gs2},
             'counts'     : {'update': False, 'value' : None},
             'comment'    : 'testing the X update'
             }
@@ -109,9 +109,9 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': True, 'value' : None},
-            'gain'       : {'update': True, 'value' : None},
-            'counts'     : {'update': True, 'value' : None},
+            'offset'     : {'update': False, 'value' : mus},
+            'gain'       : {'update': False, 'value' : gs},
+            'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
 else :
