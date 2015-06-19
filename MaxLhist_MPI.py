@@ -48,7 +48,7 @@ class Histograms():
         # set the numpy dtypes
         #---------------------
         dt_n  = np.dtype([('v', np.float128, (V,)), ('up', np.bool, (V,))]) 
-        dt_g  = np.dtype([('v', np.float32), ('up', np.bool)]) 
+        dt_g  = np.dtype([('v', np.float64), ('up', np.bool)]) 
         dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float128, (I,)),\
                           ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float128), ('e', np.float128)])
         dt_Xs = np.dtype([('v', np.float128, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
@@ -388,6 +388,7 @@ class Histograms():
         i = np.arange(self.pix_map['hist'].shape[1]).astype(np.float)
         M = float(self.pix_map['hist'].shape[0])
         
+        neg_count = 0
         for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
             
@@ -404,14 +405,18 @@ class Histograms():
                 
                 self.pix_map[m]['e'] = - np.sum(e) - p['m']
                 if self.pix_map[m]['e'] < 0.0 :
-                    print 'Error: pixel', p['pix'], 'has a negative log likelihood (prob > 1). sum(f)', np.sum(f)
+                    neg_count += 1
             else :
                 self.pix_map[m]['e'] = 0.0
         
         # reduce the errors to the master
+        comm.barrier()
         error = comm.reduce(np.sum(self.pix_map['e']), op=MPI.SUM, root = 0)
         if rank == 0 :
             self.errors.append(error)
+
+        if neg_count > 0 and rank == 0 :
+            print 'rank:', rank, 'Error: ', neg_count, 'pixels have a negative log likelihood.'
 
     def hist_fit(self, p, Xs):
         i = np.arange(p['hist'].shape[0]).astype(np.float)
@@ -548,37 +553,37 @@ class Histograms():
         if rank == 0 : mus = np.concatenate( tuple(mus) )
         
         if rank == 0 :
-            print '\n gathering gain and offsets for normalisation...'
+            print '\n gathering gain and offsets for normalisation...', len(gs), len(mus)
             i = np.where(mus['up'])
             if len(i[0]) > 0 :
-                mus[i]['v'] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
+                mus['v'][i] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
                 mus         = chunkIt(mus, size)
             else :
                 mus         = [False for r in range(size)]
             
-            i          = np.where(gs['up'])
-            if len(i[0]) > 0 :
-                gs[i]['v'] = gs[i]['v'] / np.mean(gs[i]['v']) 
+            j = np.where(gs['up'])
+            if len(j[0]) > 0 :
+                gs['v'][j] = gs[j]['v'] / np.mean(gs[j]['v']) 
                 gs         = chunkIt(gs, size)
             else :
                 gs         = [False for r in range(size)]
-        
+             
         comm.barrier()
         if rank == 0 : print ' scattering the new gain and offset values...'
         gs = comm.scatter(gs, root=0)
         if gs is not False :
             i  = np.where(gs['up'])
-            self.pix_map['g'][i] = gs[i]
+            self.pix_map['g']['v'][i] = gs['v'][i]
 
         comm.barrier()
         mus = comm.scatter(mus, root=0)
         if mus is not False :
             i   = np.where(mus['up'])
-            self.pix_map['mu'][i] = mus[i]
+            self.pix_map['mu']['v'][i] = mus['v'][i]
         # ----------------------------------
 
         comm.barrier()
-        self.unshift_ungain(self.pix_map)
+        self.unshift_ungain()
     
     def update_Xs(self, verb=False):
         comm.barrier()
@@ -706,6 +711,7 @@ class Histograms():
         if rank == 0 :
             self.pix_map = np.concatenate( tuple(self.pix_map) )
             print ' recieved the pixel map of shape:', self.pix_map.shape
+
 
     def show(self, dname = None):
         if rank != 0 :

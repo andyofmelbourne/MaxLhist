@@ -13,8 +13,8 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 400
-    N = 100
+    M = 4000
+    N = 1000
     I = 250
 
     processes = 4
@@ -99,8 +99,8 @@ if rank == 0 :
             'name'       : 'dark run',
             'histograms' : hists2,
             'vars'       : [background], 
-            'offset'     : {'update': False, 'value' : mus2},
-            'gain'       : {'update': False, 'value' : gs2},
+            'offset'     : {'update': True, 'value' : None},
+            'gain'       : {'update': True, 'value' : None},
             'counts'     : {'update': False, 'value' : None},
             'comment'    : 'testing the X update'
             }
@@ -109,8 +109,8 @@ if rank == 0 :
             'name'       : 'run',
             'histograms' : hists,
             'vars'       : [background, sPhoton], 
-            'offset'     : {'update': False, 'value' : mus},
-            'gain'       : {'update': False, 'value' : gs},
+            'offset'     : {'update': True, 'value' : None},
+            'gain'       : {'update': True, 'value' : None},
             'counts'     : {'update': True, 'value' : None},
             'comment'    : 'testing the X update'
             }
@@ -119,21 +119,21 @@ else :
 
 # Retrieve
 #---------
-H = MaxLhist_MPI.Histograms([data2, data])
+H = MaxLhist_MPI.Histograms([data])
 
 for i in range(10):
     H.update_counts()
-    #H.update_gain_offsets(quadfit=True)
+    H.update_gain_offsets(quadfit=True)
     H.update_Xs()
     H.pixel_errors()
 H.gather_pix_map()
 
 if rank == 0 :
-    #pix = H.datas[1]['histograms']
-    #print ns.shape, H.pix_map['n']['v'].shape
-    #print 'fidelity ns     :' , np.sum((ns[1 :] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
-    #print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
-    #print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
+    pix = H.datas[0]['histograms']
+    print ns.shape, H.pix_map['n']['v'].shape
+    print 'fidelity ns     :' , np.sum((ns[1 :] - H.pix_map['n']['v'][pix, 1])**2)/np.sum(ns[1:]**2)
+    print 'fidelity gain   :' , np.sum((gs - H.pix_map['g']['v'])**2)/np.sum(gs**2)
+    print 'rms      mus    :' , np.sqrt( np.mean( (mus - H.pix_map['mu']['v'])**2 ) )
     
     for v in Xv :
         for i in range(len(H.Xs)) :
