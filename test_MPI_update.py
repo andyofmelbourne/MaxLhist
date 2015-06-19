@@ -13,8 +13,8 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 1000
-    N = 1000
+    M = 100
+    N = 100
     I = 250
 
     processes = 4

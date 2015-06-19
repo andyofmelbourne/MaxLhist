@@ -423,7 +423,7 @@ class Histograms():
         """
         """
         comm.barrier()
-        if rank == 0 : '\n updating the count fractions...'
+        if rank == 0 : print '\n updating the count fractions...'
         M = float(self.pix_map['hist'].shape[0])
         
         for m, p in enumerate(self.pix_map):
@@ -454,7 +454,7 @@ class Histograms():
 
     def update_gain_offsets(self, quadfit=False):
         comm.barrier()
-        if rank == 0 : '\n updating gain and offset values...'
+        if rank == 0 : print '\n updating gain and offset values...'
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
         fftfreq = I * np.fft.fftfreq(I)
@@ -549,23 +549,31 @@ class Histograms():
         if rank == 0 :
             print '\n gathering gain and offsets for normalisation...'
             i = np.where(mus['up'])
-            mus[i]['v'] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
-            mus = chunkIt(mus, size)
+            if len(i[0]) > 0 :
+                mus[i]['v'] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
+                mus         = chunkIt(mus, size)
+            else :
+                mus         = [False for r in range(size)]
             
-            i = np.where(gs['up'])
-            gs[i]['v'] = gs[i]['v'] / np.mean(gs[i]['v']) 
-            gs = chunkIt(gs, size)
+            i          = np.where(gs['up'])
+            if len(i[0]) > 0 :
+                gs[i]['v'] = gs[i]['v'] / np.mean(gs[i]['v']) 
+                gs         = chunkIt(gs, size)
+            else :
+                gs         = [False for r in range(size)]
         
         comm.barrier()
         if rank == 0 : print ' scattering the new gain and offset values...'
         gs = comm.scatter(gs, root=0)
-        i  = np.where(gs['up'])
-        self.pix_map['g'][i] = gs[i]
+        if gs is not False :
+            i  = np.where(gs['up'])
+            self.pix_map['g'][i] = gs[i]
 
         comm.barrier()
         mus = comm.scatter(mus, root=0)
-        i   = np.where(mus['up'])
-        self.pix_map['mu'][i] = mus[i]
+        if mus is not False :
+            i   = np.where(mus['up'])
+            self.pix_map['mu'][i] = mus[i]
         # ----------------------------------
 
         comm.barrier()
@@ -628,7 +636,7 @@ class Histograms():
         count = 0
         for i in self.adus[rank]:
             if rank == 0 : 
-                update_progress(float(count + 1) / I)
+                update_progress(float(count + 1) / float(len(self.adus[rank])))
                 count += 1
 
             vs_up      = np.where(up[:, i])[0]
