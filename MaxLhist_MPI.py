@@ -58,6 +58,7 @@ class Histograms():
         # check input, initialise, broadcast data to workers
         #---------------------------------------------------
         if rank == 0 :
+            self.errors  = []
             pix_map, Xs  = self.process_input(datas, vars, M, I, V)
             pix_map, Xs  = self.init_input(datas, vars, pix_map, Xs)
             
@@ -90,9 +91,9 @@ class Histograms():
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
         self.pix_map = comm.scatter(self.pix_map, root=0)
 
-        self.pix_map = self.unshift_ungain(self.pix_map)
-        self.pix_map = self.pixel_multiplicity(self.pix_map)
-        self.pix_map = self.pixel_errors(self.Xs, self.pix_map)
+        self.unshift_ungain()
+        self.pixel_multiplicity()
+        self.pixel_errors()
         comm.barrier()
 
 
@@ -362,35 +363,32 @@ class Histograms():
                 Xs[v]['v'][:] = f
         return pix_map, Xs
 
-    def unshift_ungain(self, pix_map):
+    def unshift_ungain(self):
         if rank == 0 : print '\n calcuating the unshifted and ungained histograms...'
-        i = np.arange(pix_map['hist'].shape[1]).astype(np.float)
-        M = float(pix_map['hist'].shape[0])
+        i = np.arange(self.pix_map['hist'].shape[1]).astype(np.float)
+        M = float(self.pix_map['hist'].shape[0])
         
-        for m, p in enumerate(pix_map):
+        for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
              
             if p['valid'] :
-                pix_map[m]['hist_cor'][:] = np.interp(i/p['g']['v'] + p['mu']['v'], i, p['hist'].astype(np.float64), left=0.0, right=0.0) / p['g']['v'] 
-        return pix_map
+                self.pix_map[m]['hist_cor'][:] = np.interp(i/p['g']['v'] + p['mu']['v'], i, p['hist'].astype(np.float64), left=0.0, right=0.0) / p['g']['v'] 
     
-    def pixel_multiplicity(self, pix_map):
+    def pixel_multiplicity(self):
         if rank == 0 : print '\n calcuating the log(multiplicity) for each pixel...'
-        M = float(pix_map['hist'].shape[0])
+        M = float(self.pix_map['hist'].shape[0])
         
-        for m, p in enumerate(pix_map):
+        for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
              
-            pix_map[m]['m'] = gammaln(np.sum(p['hist']) + 1) - np.sum(gammaln(p['hist'] + 1))
-        
-        return pix_map
+            self.pix_map[m]['m'] = gammaln(np.sum(p['hist']) + 1) - np.sum(gammaln(p['hist'] + 1))
 
-    def pixel_errors(self, Xs, pix_map, prob_tol = 1.0e-10):
+    def pixel_errors(self, prob_tol = 1.0e-10):
         if rank == 0 : print '\n calcuating the log(likelihood) error for each pixel...'
-        i = np.arange(pix_map['hist'].shape[1]).astype(np.float)
-        M = float(pix_map['hist'].shape[0])
+        i = np.arange(self.pix_map['hist'].shape[1]).astype(np.float)
+        M = float(self.pix_map['hist'].shape[0])
         
-        for m, p in enumerate(pix_map):
+        for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
             
             if p['valid'] :
@@ -398,19 +396,22 @@ class Histograms():
                 Is = np.where(p['hist'] > prob_tol)
                 
                 # evaluate the shifted gained probability function
-                f = np.sum( Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
+                f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
                 f = np.interp(i*p['g']['v'] - p['mu']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
                 
                 # sum the log liklihood errors for this pixel
                 e  = p['hist'][Is] * np.log(prob_tol + f[Is])
                 
-                pix_map[m]['e'] = - np.sum(e) - p['m']
-                if pix_map[m]['e'] < 0.0 :
+                self.pix_map[m]['e'] = - np.sum(e) - p['m']
+                if self.pix_map[m]['e'] < 0.0 :
                     print 'Error: pixel', p['pix'], 'has a negative log likelihood (prob > 1). sum(f)', np.sum(f)
             else :
-                pix_map[m]['e'] = 0.0
+                self.pix_map[m]['e'] = 0.0
         
-        return pix_map
+        # reduce the errors to the master
+        error = comm.reduce(np.sum(self.pix_map['e']), op=MPI.SUM, root = 0)
+        if rank == 0 :
+            self.errors.append(error)
 
     def hist_fit(self, p, Xs):
         i = np.arange(p['hist'].shape[0]).astype(np.float)
@@ -693,9 +694,7 @@ class Histograms():
         # normalise
         for v in range(len(self.Xs)):
             self.Xs['v'][v][:] = self.Xs['v'][v][:] / np.sum(self.Xs['v'][v][:])
-        
-        self.pixel_errors(self.Xs, self.pix_map)
-    
+                
     def gather_pix_map(self):
         """
         Gather the results from everyone
@@ -724,7 +723,7 @@ class Histograms():
                     pixels_valid = pixels[pixels_valid]
             dataname = dname
         
-        #errors   = self.result['error vs iter']
+        errors   = self.errors
         # get the sum of the unshifted and ungained histograms
         total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
         hist_proj    = np.sum(self.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
@@ -793,8 +792,8 @@ class Histograms():
         gplot.plot(gs[m_sort],  pen=(0, 255, 0))
         gplot.setXLink('mus')
         
-        #p4 = win.addPlot(title="log likelihood error", y = errors)
-        #p4.showGrid(x=True, y=True) 
+        p4 = win.addPlot(title="log likelihood error", y = errors)
+        p4.showGrid(x=True, y=True) 
 
         win.nextRow()
 
