@@ -532,7 +532,8 @@ class Histograms():
                 else :
                     #print 'quadratic fit failed', mu_0, mu, mus_t, cor.shape, poly, vs
                     mu      = fftfreq[mui]
-                    cor_max = cor_max0
+            else :
+                mu      = fftfreq[mui]
             
             self.pix_map[m]['mu']['v'] = mu
             self.pix_map[m]['g']['v']  = g0
@@ -545,7 +546,8 @@ class Histograms():
 
 
     def normalise_gain_offsets(self):
-        comm.barrier()
+        if rank == 0 : print '\n gathering gain and offsets for normalisation...'
+        
         gs  = comm.gather(self.pix_map['g'], root=0)
         if rank == 0 : gs  = np.concatenate( tuple(gs) )
         
@@ -553,7 +555,6 @@ class Histograms():
         if rank == 0 : mus = np.concatenate( tuple(mus) )
         
         if rank == 0 :
-            print '\n gathering gain and offsets for normalisation...', len(gs), len(mus)
             i = np.where(mus['up'])
             if len(i[0]) > 0 :
                 mus['v'][i] = mus[i]['v'] - np.sum(mus[i]['v']) / float(len(i[0]))
@@ -568,14 +569,12 @@ class Histograms():
             else :
                 gs         = [False for r in range(size)]
              
-        comm.barrier()
         if rank == 0 : print ' scattering the new gain and offset values...'
         gs = comm.scatter(gs, root=0)
         if gs is not False :
             i  = np.where(gs['up'])
             self.pix_map['g']['v'][i] = gs['v'][i]
 
-        comm.barrier()
         mus = comm.scatter(mus, root=0)
         if mus is not False :
             i   = np.where(mus['up'])
