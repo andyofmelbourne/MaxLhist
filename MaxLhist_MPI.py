@@ -865,6 +865,11 @@ class Histograms():
                     self.datas.append(data)
                     data = {}
 
+
+def load_display(fnam):
+    H = Histograms(fnam_h5 = fnam)
+    H.show()
+
 def chunkIt(seq, num):
     splits = np.mgrid[0:len(seq):(num+1)*1J].astype(np.int)
     out    = []
