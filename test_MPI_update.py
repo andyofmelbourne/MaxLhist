@@ -13,7 +13,7 @@ size = comm.Get_size()
 
 if rank == 0 :
     # test data
-    M = 4000
+    M = 1000
     N = 1000
     I = 250
 
@@ -74,16 +74,16 @@ if rank == 0 :
     background = {
             'name'      : 'electronic noise',
             'type'      : 'random variable',
-            'function'  : {'update': True, 'value' : b},
-            #'function'  : {'update': False, 'value' : Xv[0]},
+            #'function'  : {'update': True, 'value' : b},
+            'function'  : {'update': False, 'value' : Xv[0]},
             }
 
     sPhoton = {
             'name'      : 'single photon',
             'type'      : 'random variable',
-            'function'  : {'update': True, 'value' : s_mask * s, \
-                           'smooth' : 0., 'adus' : np.arange(100, 160, 1)},
-            #'function'  : {'update': False, 'value' : Xv[1]},
+            #'function'  : {'update': True, 'value' : s_mask * s, \
+            #               'smooth' : 0., 'adus' : np.arange(100, 160, 1)},
+            'function'  : {'update': False, 'value' : Xv[1]},
             }
 
     dPhoton = {
@@ -111,7 +111,7 @@ if rank == 0 :
             'vars'       : [background, sPhoton], 
             'offset'     : {'update': True, 'value' : None},
             'gain'       : {'update': True, 'value' : None},
-            'counts'     : {'update': True, 'value' : None},
+            'counts'     : {'update': False, 'value' : counts},
             'comment'    : 'testing the X update'
             }
 else :
@@ -121,11 +121,13 @@ else :
 #---------
 H = MaxLhist_MPI.Histograms([data])
 
-for i in range(10):
-    H.update_counts()
+for i in range(1):
+    #H.update_counts()
     H.update_gain_offsets(quadfit=True)
-    H.update_Xs()
+    #H.update_gain_offsets_new(quadfit=True)
+    #H.update_Xs()
     H.pixel_errors()
+
 H.gather_pix_map()
 
 if rank == 0 :
