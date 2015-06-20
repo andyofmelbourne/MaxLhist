@@ -426,7 +426,8 @@ class Histograms():
         
         # reduce the errors to the master
         comm.barrier()
-        error = comm.reduce(np.sum(self.pix_map['e']), op=MPI.SUM, root = 0)
+        valid = np.where(self.pix_map['valid'])
+        error = comm.reduce(np.sum(self.pix_map['e'][valid]), op=MPI.SUM, root = 0)
         if rank == 0 :
             self.errors.append(error)
     
@@ -756,12 +757,12 @@ class Histograms():
          
         mus_name  = dataname + ' offset'
         gs_name   = dataname + ' gain'
-        p_errors  = self.pix_map['e'][pixels]
+        p_errors  = self.pix_map['e'][pixels_valid]
         m_sort    = np.argsort(p_errors)
-        mus       = self.pix_map['mu']['v'][pixels]
-        gs        = self.pix_map['g']['v'][pixels]
-        hists     = self.pix_map['hist'][pixels]
-        hists_cor = self.pix_map['hist_cor'][pixels]
+        mus       = self.pix_map['mu']['v'][pixels_valid]
+        gs        = self.pix_map['g']['v'][pixels_valid]
+        hists     = self.pix_map['hist'][pixels_valid]
+        hists_cor = self.pix_map['hist_cor'][pixels_valid]
         
         import pyqtgraph as pg
         import PyQt4.QtGui
@@ -790,7 +791,7 @@ class Histograms():
         title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
         hplot  = win.addPlot(title = title)
         curve_his = hplot.plot(hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
-        curve_fit = hplot.plot(self.hist_fit(self.pix_map[pixels][m], self.Xs), pen = (0, 255, 0))
+        curve_fit = hplot.plot(self.hist_fit(self.pix_map[pixels_valid][m], self.Xs), pen = (0, 255, 0))
         hplot.setXLink('f')
         def replot():
             m = hline.value()
@@ -798,7 +799,7 @@ class Histograms():
             title = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
             hplot.setTitle(title)
             curve_his.setData(hists[m])
-            curve_fit.setData(self.hist_fit(self.pix_map[pixels][m], self.Xs))
+            curve_fit.setData(self.hist_fit(self.pix_map[pixels_valid][m], self.Xs))
         
         p_error_plot = win.addPlot(title='pixel errors', name = 'p_errors')
         p_error_plot.plot(p_errors[m_sort], pen=(255, 255, 255))
@@ -823,8 +824,8 @@ class Histograms():
 
         win.nextRow()
 
-        counts = np.sum(self.pix_map['hist'][pixels], axis=-1)
-        ns     = self.pix_map['n']['v'][pixels]
+        counts = np.sum(self.pix_map['hist'][pixels_valid], axis=-1)
+        ns     = self.pix_map['n']['v'][pixels_valid]
         cplots = []
         for c in range(self.Xs.shape[0]):
             cplots.append(win.addPlot(title=self.Xs[c]['name'] + ' counts: ' + str(int(np.sum(counts * ns[:, c]))), name = self.Xs[c]['name']))
