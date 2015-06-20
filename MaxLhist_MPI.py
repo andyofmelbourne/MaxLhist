@@ -7,6 +7,8 @@ from scipy.special import gammaln
 import sys
 import copy
 from mpi4py import MPI
+import h5py
+
 
 """
 The basic data structures that we work with: 
@@ -33,56 +35,69 @@ size = comm.Get_size()
 
 
 class Histograms():
-    def __init__(self, datas):
-        # set the array dimensions
-        #-------------------------
-        if rank == 0 :
-            vars, M, I, V = self.check_input(datas)
-        else :
-            M = I = V = 0
-        
-        comm.barrier()
-        M, I, V = comm.bcast([M, I, V], root=0)
-        self.M, self.I, self.V = M, I, V
-        
-        # set the numpy dtypes
-        #---------------------
-        dt_n  = np.dtype([('v', np.float128, (V,)), ('up', np.bool, (V,))]) 
-        dt_g  = np.dtype([('v', np.float64), ('up', np.bool)]) 
-        dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float128, (I,)),\
-                          ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float128), ('e', np.float128)])
-        dt_Xs = np.dtype([('v', np.float128, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
-        self.dt_pm = dt_pm
-        self.dt_Xs = dt_Xs
-        
-        # check input, initialise, broadcast data to workers
-        #---------------------------------------------------
-        if rank == 0 :
-            self.errors  = []
-            pix_map, Xs  = self.process_input(datas, vars, M, I, V)
-            pix_map, Xs  = self.init_input(datas, vars, pix_map, Xs)
+    def __init__(self, datas = None, fnam_h5 = None):
+        """
+        """
+        if datas is not None :
+            # set the array dimensions
+            #-------------------------
+            if rank == 0 :
+                vars, M, I, V = self.check_input(datas)
+            else :
+                M = I = V = 0
             
-            self.pix_map = chunkIt(pix_map, size)
-            self.Xs      = Xs
-
-            # I need to remember which dataset belongs to 
-            # to which pixels. As well as the names and comments
-            self.datas = datas
-            # remove the raw data and put in a reference to the 
-            # pixel numbers
-            start = 0
-            for d in range(len(datas)):
-                Md = self.datas[d]['histograms'].shape[0]
-                del self.datas[d]['histograms']
+            comm.barrier()
+            M, I, V = comm.bcast([M, I, V], root=0)
+            self.M, self.I, self.V = M, I, V
+            
+            # set the numpy dtypes
+            #---------------------
+            dt_n  = np.dtype([('v', np.float64, (V,)), ('up', np.bool, (V,))]) 
+            dt_g  = np.dtype([('v', np.float64), ('up', np.bool)]) 
+            dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float64, (I,)),\
+                              ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float64), ('e', np.float64)])
+            dt_Xs = np.dtype([('v', np.float64, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
+            self.dt_pm = dt_pm
+            self.dt_Xs = dt_Xs
+            
+            # check input, initialise, broadcast data to workers
+            #---------------------------------------------------
+            if rank == 0 :
+                self.errors  = []
+                pix_map, Xs  = self.process_input(datas, vars, M, I, V)
+                pix_map, Xs  = self.init_input(datas, vars, pix_map, Xs)
                 
-                self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
-                start += Md
+                self.pix_map = chunkIt(pix_map, size)
+                self.Xs      = Xs
+
+                # I need to remember which dataset belongs to 
+                # to which pixels. As well as the names and comments
+                self.datas = datas
+                # remove the raw data and put in a reference to the 
+                # pixel numbers
+                start = 0
+                for d in range(len(datas)):
+                    Md = self.datas[d]['histograms'].shape[0]
+                    del self.datas[d]['histograms']
+                    
+                    self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
+                    start += Md
+            else :
+                self.Xs      = None
+                self.pix_map = None
+            
+            self.adus    = chunkIt(np.arange(I), size)
+            
+            self.scatter_bcast()
+            self.unshift_ungain()
+            self.pixel_multiplicity()
+            self.pixel_errors()
+        
         else :
-            self.Xs      = None
-            self.pix_map = None
-        
-        self.adus    = chunkIt(np.arange(I), size)
-        
+            self.load_h5(fnam_h5)
+
+
+    def scatter_bcast(self):
         comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
@@ -90,11 +105,6 @@ class Histograms():
         comm.barrier()
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
         self.pix_map = comm.scatter(self.pix_map, root=0)
-
-        self.unshift_ungain()
-        self.pixel_multiplicity()
-        self.pixel_errors()
-        comm.barrier()
 
 
     def check_input(self, datas):
@@ -209,6 +219,7 @@ class Histograms():
         V = len(vars)
         return vars, M, I, V
      
+
     def process_input(self, datas, vars, M, I, V):
         """
         Fill the pixel_map and Xs with datas
@@ -312,6 +323,7 @@ class Histograms():
         
         return pix_map, Xs
 
+
     def init_input(self, datas, vars, pix_map, Xs):
         """
         Don't touch anything that has been initialised.
@@ -363,6 +375,7 @@ class Histograms():
                 Xs[v]['v'][:] = f
         return pix_map, Xs
 
+
     def unshift_ungain(self):
         if rank == 0 : print '\n calcuating the unshifted and ungained histograms...'
         i = np.arange(self.pix_map['hist'].shape[1]).astype(np.float)
@@ -374,6 +387,7 @@ class Histograms():
             if p['valid'] :
                 self.pix_map[m]['hist_cor'][:] = np.interp(i/p['g']['v'] + p['mu']['v'], i, p['hist'].astype(np.float64), left=0.0, right=0.0) / p['g']['v'] 
     
+
     def pixel_multiplicity(self):
         if rank == 0 : print '\n calcuating the log(multiplicity) for each pixel...'
         M = float(self.pix_map['hist'].shape[0])
@@ -382,6 +396,7 @@ class Histograms():
             if rank == 0 : update_progress(float(m + 1) / M)
              
             self.pix_map[m]['m'] = gammaln(np.sum(p['hist']) + 1) - np.sum(gammaln(p['hist'] + 1))
+
 
     def pixel_errors(self, prob_tol = 1.0e-10):
         if rank == 0 : print '\n calcuating the log(likelihood) error for each pixel...'
@@ -414,9 +429,10 @@ class Histograms():
         error = comm.reduce(np.sum(self.pix_map['e']), op=MPI.SUM, root = 0)
         if rank == 0 :
             self.errors.append(error)
-
+    
         if neg_count > 0 and rank == 0 :
             print 'rank:', rank, 'Error: ', neg_count, 'pixels have a negative log likelihood.'
+
 
     def hist_fit(self, p, Xs):
         i = np.arange(p['hist'].shape[0]).astype(np.float)
@@ -425,6 +441,7 @@ class Histograms():
         f *= np.sum(p['hist'])
         return f
         
+
     def update_counts(self):
         """
         """
@@ -457,6 +474,7 @@ class Histograms():
                 
                 res    = scipy.optimize.minimize(fun, ns0, bounds=bounds, tol = 1.0e-10)
                 self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
+
 
     def update_gain_offsets(self, quadfit=False):
         comm.barrier()
@@ -585,6 +603,7 @@ class Histograms():
         comm.barrier()
         self.unshift_ungain()
     
+
     def update_Xs(self, verb=False):
         comm.barrier()
         if rank == 0 : print '\n updating the Xs...'
@@ -700,6 +719,7 @@ class Histograms():
         for v in range(len(self.Xs)):
             self.Xs['v'][v][:] = self.Xs['v'][v][:] / np.sum(self.Xs['v'][v][:])
                 
+
     def gather_pix_map(self):
         """
         Gather the results from everyone
@@ -812,6 +832,38 @@ class Histograms():
             cplots[-1].setXLink('mus')
 
         sys.exit(app.exec_())
+
+
+    def dump_h5(self, fnam):
+        if rank == 0 :
+            f = h5py.File(fnam, 'w')
+            f.create_dataset('pix_map', data=self.pix_map)
+            f.create_dataset('Xs'     , data=self.Xs)
+            f.create_dataset('errors' , data=np.array(self.errors))
+            g = f.create_group('hist_pixels')
+            for d in self.datas : 
+                g.create_dataset(d['name'] + ' pixels', data=d['histograms'])
+                g.create_dataset(d['name'] + ' comment', data=d['comment'])
+
+
+    def load_h5(self, fnam):
+        if rank == 0 :
+            f = h5py.File(fnam, 'r')
+            self.pix_map = f['pix_map'].value
+            self.Xs      = f['Xs'].value
+            self.errors  = list(f['errors'].value)
+            #
+            # get the dataset pixels name and comment
+            g          = f['hist_pixels']
+            self.datas = []
+            data       = {}
+            for k in g.keys():
+                if k.find('pixels') != -1 :
+                    data['name']       = k[: k.find('pixels')-1]
+                    data['histograms'] = g[k].value
+                    data['comment']    = g[data['name'] + ' comment'].value
+                    self.datas.append(data)
+                    data = {}
 
 def chunkIt(seq, num):
     splits = np.mgrid[0:len(seq):(num+1)*1J].astype(np.int)
