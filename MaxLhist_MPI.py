@@ -72,16 +72,21 @@ class Histograms():
 
                 # I need to remember which dataset belongs to 
                 # to which pixels. As well as the names and comments
-                self.datas = datas
+                #self.datas = datas
+                self.datas = []
                 # remove the raw data and put in a reference to the 
                 # pixel numbers
                 start = 0
+                data = {}
                 for d in range(len(datas)):
-                    Md = self.datas[d]['histograms'].shape[0]
-                    del self.datas[d]['histograms']
-                    
-                    self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
+                    data['name'] = datas[d]['name']
+                    data['comment'] = datas[d]['comment']
+                    Md = datas[d]['histograms'].shape[0]
+                    data['histograms'] = np.arange(start, start + Md, 1)
+                    #Md = self.datas[d]['histograms'].shape[0]
+                    #del self.datas[d]['histograms']
                     start += Md
+                    self.datas.append(data)
             else :
                 self.Xs      = None
                 self.pix_map = None
@@ -98,13 +103,27 @@ class Histograms():
 
 
     def scatter_bcast(self):
-        comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
         
-        comm.barrier()
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
-        self.pix_map = comm.scatter(self.pix_map, root=0)
+        if rank == 0 : print ' len(self.pix_map)', len(self.pix_map), [len(p) for p in self.pix_map]
+        if rank == 0 :
+            for i in range(1, size):
+                print ' I am rank', rank, ' sending pixel map', i, 'to rank', i
+                comm.send(self.pix_map[i], dest=i, tag=i)
+                print 'Done: I am rank', rank, ' sending pixel map', i, 'to rank', i
+            
+            del self.pix_map[1 :]
+            self.pix_map = self.pix_map[0]
+        else :
+            print ' I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+            self.pix_map = comm.recv(source = 0, tag=rank)
+            print 'Done: I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+        
+        comm.barrier()
+        # this causes a seg fault for large arrays... ?
+        #self.pix_map = comm.scatter(self.pix_map, root=0)
 
 
     def check_input(self, datas):
@@ -413,7 +432,7 @@ class Histograms():
                 
                 # evaluate the shifted gained probability function
                 f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
-                f = np.interp(i*p['g']['v'] - p['mu']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
+                f = np.interp((i - p['mu']['v'])*p['g']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
                 
                 # sum the log liklihood errors for this pixel
                 e  = p['hist'][Is] * np.log(prob_tol + f[Is])
@@ -713,7 +732,7 @@ class Histograms():
             print ' recieved the pixel map of shape:', self.pix_map.shape
 
 
-    def show(self, dname = None):
+    def show(self, dname = None, subsample=10000):
         if rank != 0 :
             return 
         
@@ -729,6 +748,11 @@ class Histograms():
                     pixels_valid = pixels[pixels_valid]
             dataname = dname
         
+        if subsample is not None and subsample < len(pixels_valid):
+            subsample = np.random.random((subsample)) * len(pixels_valid)
+            subsample = subsample.astype(np.int)
+            pixels_valid = pixels_valid[subsample]
+
         errors   = self.errors
         # get the sum of the unshifted and ungained histograms
         total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
