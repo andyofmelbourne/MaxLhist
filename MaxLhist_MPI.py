@@ -846,6 +846,26 @@ class Histograms():
                     data = {}
 
 
+    def mask_bad_pixels(self, error_thresh=None, sigma=None):
+        if error_thresh is not None :
+            mask_pix = np.where(self.pix_map['e']>error_thresh)[0]
+            print '\n ',rank,'masking', len(mask_pix),'pixels...'
+            self.pix_map['valid'][mask_pix]      = False
+            self.pix_map['n']['up'][mask_pix, :] = False
+            self.pix_map['g']['up'][mask_pix]    = False
+            self.pix_map['mu']['up'][mask_pix]   = False
+        
+        elif sigma is not None :
+            sig  = np.std(self.pix_map['e'])
+            mean = np.mean(self.pix_map['e'])
+            mask_pix = np.where((self.pix_map['e'] - mean) > sigma * sig)
+            print '\n ',rank,'masking', len(mask_pix),'pixels, sig, mean, thresh', sig, mean, sigma * sig + mean
+            self.pix_map['valid'][mask_pix]      = False
+            self.pix_map['n']['up'][mask_pix, :] = False
+            self.pix_map['g']['up'][mask_pix]    = False
+            self.pix_map['mu']['up'][mask_pix]   = False
+
+
 def load_display(fnam):
     H = Histograms(fnam_h5 = fnam)
     H.show()
