@@ -419,7 +419,7 @@ class Histograms():
                 e  = p['hist'][Is] * np.log(prob_tol + f[Is])
                 
                 self.pix_map[m]['e'] = - np.sum(e) - p['m']
-                if self.pix_map[m]['e'] < 0.0 :
+                if self.pix_map[m]['e'] < 0.0 and self.pix_map[m]['valid']:
                     neg_count += 1
             else :
                 self.pix_map[m]['e'] = 0.0
@@ -478,7 +478,7 @@ class Histograms():
 
 
     def update_gain_offsets(self, quadfit=False, gmin=0.5, gmax=1.5, N=10, iters=3):
-        if rank == 0 : print '\n updating gain and offset values...'
+        if rank == 0 : print '\n updating gain and offset values...', len(self.pix_map)
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
         fftfreq = I * np.fft.fftfreq(I)
@@ -824,6 +824,7 @@ class Histograms():
             for d in self.datas : 
                 g.create_dataset(d['name'] + ' pixels', data=d['histograms'])
                 g.create_dataset(d['name'] + ' comment', data=d['comment'])
+            f.close()
 
 
     def load_h5(self, fnam):
@@ -844,9 +845,11 @@ class Histograms():
                     data['comment']    = g[data['name'] + ' comment'].value
                     self.datas.append(data)
                     data = {}
+            f.close()
 
 
     def mask_bad_pixels(self, error_thresh=None, sigma=None):
+
         if error_thresh is not None :
             mask_pix = np.where(self.pix_map['e']>error_thresh)[0]
             print '\n ',rank,'masking', len(mask_pix),'pixels...'
@@ -856,9 +859,20 @@ class Histograms():
             self.pix_map['mu']['up'][mask_pix]   = False
         
         elif sigma is not None :
-            sig  = np.std(self.pix_map['e'])
-            mean = np.mean(self.pix_map['e'])
-            mask_pix = np.where((self.pix_map['e'] - mean) > sigma * sig)
+            errors  = comm.gather(self.pix_map['e'], root=0)
+            
+            if rank == 0 : 
+                errors = np.array(errors).flatten()
+                print errors.shape, errors.dtype
+                sig    = np.std(errors)
+                mean   = np.mean(errors)
+            else :
+                sig, mean = None, None
+            
+            sig, mean = comm.bcast([sig, mean], root=0)
+            
+            mask_pix = np.where((self.pix_map['e'] - mean) > sigma * sig)[0]
+             
             print '\n ',rank,'masking', len(mask_pix),'pixels, sig, mean, thresh', sig, mean, sigma * sig + mean
             self.pix_map['valid'][mask_pix]      = False
             self.pix_map['n']['up'][mask_pix, :] = False
