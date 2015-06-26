@@ -7,11 +7,14 @@ from PyQt4.QtGui import QMainWindow
 import PyQt4.uic
 from PyQt4.QtGui import QApplication
 
-f = open('Ui_gui.py', 'w')
-PyQt4.uic.compileUi('gui.ui', f)
-f.close()
 
-from Ui_gui import Ui_MainWindow
+Ui_MainWindow, QMainWindow = PyQt4.uic.loadUiType('gui.ui')
+
+#f = open('Ui_gui.py', 'w')
+#PyQt4.uic.compileUi('gui.ui', f)
+#f.close()
+
+#from Ui_gui import Ui_MainWindow
 
 
 cheetahdir   = '/home/amorgan/Desktop/nfs_home/data/fraglo/cheetah/'
