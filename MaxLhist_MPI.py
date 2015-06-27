@@ -46,7 +46,6 @@ class Histograms():
             else :
                 M = I = V = 0
             
-            comm.barrier()
             M, I, V = comm.bcast([M, I, V], root=0)
             self.M, self.I, self.V = M, I, V
             
@@ -72,16 +71,21 @@ class Histograms():
 
                 # I need to remember which dataset belongs to 
                 # to which pixels. As well as the names and comments
-                self.datas = datas
+                #self.datas = datas
+                self.datas = []
                 # remove the raw data and put in a reference to the 
                 # pixel numbers
                 start = 0
+                data = {}
                 for d in range(len(datas)):
-                    Md = self.datas[d]['histograms'].shape[0]
-                    del self.datas[d]['histograms']
-                    
-                    self.datas[d]['histograms'] = np.arange(start, start + Md, 1)
+                    data['name'] = datas[d]['name']
+                    data['comment'] = datas[d]['comment']
+                    Md = datas[d]['histograms'].shape[0]
+                    data['histograms'] = np.arange(start, start + Md, 1)
+                    #Md = self.datas[d]['histograms'].shape[0]
+                    #del self.datas[d]['histograms']
                     start += Md
+                    self.datas.append(copy.deepcopy(data))
             else :
                 self.Xs      = None
                 self.pix_map = None
@@ -98,13 +102,27 @@ class Histograms():
 
 
     def scatter_bcast(self):
-        comm.barrier()
         if rank == 0 : print '\n broadcasting the Xs to everyone...'
         self.Xs = comm.bcast(self.Xs, root=0)
         
-        comm.barrier()
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
-        self.pix_map = comm.scatter(self.pix_map, root=0)
+        #if rank == 0 : print ' len(self.pix_map)', len(self.pix_map), [len(p) for p in self.pix_map]
+        if rank == 0 :
+            for i in range(1, size):
+                update_progress(float(i+1) / float(size))
+                #print ' I am rank', rank, ' sending pixel map', i, 'to rank', i
+                comm.send(self.pix_map[i], dest=i, tag=i)
+                #print 'Done: I am rank', rank, ' sending pixel map', i, 'to rank', i
+            
+            del self.pix_map[1 :]
+            self.pix_map = self.pix_map[0]
+        else :
+            #print ' I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+            self.pix_map = comm.recv(source = 0, tag=rank)
+            #print 'Done: I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+        
+        # this causes a seg fault for large arrays... ?
+        #self.pix_map = comm.scatter(self.pix_map, root=0)
 
 
     def check_input(self, datas):
@@ -413,19 +431,18 @@ class Histograms():
                 
                 # evaluate the shifted gained probability function
                 f = np.sum( self.Xs['v'] * p['n']['v'][:, np.newaxis], axis=0)
-                f = np.interp(i*p['g']['v'] - p['mu']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
+                f = np.interp((i - p['mu']['v'])*p['g']['v'], i, f.astype(np.float64), left=0.0, right=0.0) * p['g']['v'] 
                 
                 # sum the log liklihood errors for this pixel
                 e  = p['hist'][Is] * np.log(prob_tol + f[Is])
                 
                 self.pix_map[m]['e'] = - np.sum(e) - p['m']
-                if self.pix_map[m]['e'] < 0.0 :
+                if self.pix_map[m]['e'] < 0.0 and self.pix_map[m]['valid']:
                     neg_count += 1
             else :
                 self.pix_map[m]['e'] = 0.0
         
         # reduce the errors to the master
-        comm.barrier()
         valid = np.where(self.pix_map['valid'])
         error = comm.reduce(np.sum(self.pix_map['e'][valid]), op=MPI.SUM, root = 0)
         if rank == 0 :
@@ -446,7 +463,6 @@ class Histograms():
     def update_counts(self):
         """
         """
-        comm.barrier()
         if rank == 0 : print '\n updating the count fractions...'
         M = float(self.pix_map['hist'].shape[0])
         
@@ -478,7 +494,7 @@ class Histograms():
 
 
     def update_gain_offsets(self, quadfit=False, gmin=0.5, gmax=1.5, N=10, iters=3):
-        if rank == 0 : print '\n updating gain and offset values...'
+        if rank == 0 : print '\n updating gain and offset values...', len(self.pix_map)
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
         fftfreq = I * np.fft.fftfreq(I)
@@ -585,7 +601,6 @@ class Histograms():
 
 
     def update_Xs(self, verb=False):
-        comm.barrier()
         if rank == 0 : print '\n updating the Xs...'
         
         I  = self.Xs[0]['v'].shape[0] 
@@ -691,7 +706,6 @@ class Histograms():
                 
                 my_X[vs_up, i] = xs
         
-        comm.barrier()
         if rank == 0 : print '\n reducing the Xs to everyone...'
         self.Xs['v'][:] = comm.allreduce(my_X, op=MPI.SUM)
         
@@ -704,16 +718,24 @@ class Histograms():
         """
         Gather the results from everyone
         """
-        comm.barrier()
         if rank == 0 : print '\n gathering the pixel maps from everyone...'
-        self.pix_map = comm.gather(self.pix_map, root=0)
+        #self.pix_map = comm.gather(self.pix_map, root=0)
         
+        if rank == 0 :
+            self.pix_map = [self.pix_map]
+            for i in range(1, size):
+                update_progress(float(i+1) / float(size))
+                self.pix_map.append([])
+                self.pix_map[-1] = comm.recv(source = i, tag=i)
+        else :
+            comm.send(self.pix_map, dest=0, tag=rank)
+
         if rank == 0 :
             self.pix_map = np.concatenate( tuple(self.pix_map) )
             print ' recieved the pixel map of shape:', self.pix_map.shape
 
 
-    def show(self, dname = None):
+    def show(self, dname = None, subsample=10000):
         if rank != 0 :
             return 
         
@@ -729,6 +751,11 @@ class Histograms():
                     pixels_valid = pixels[pixels_valid]
             dataname = dname
         
+        if subsample is not None and subsample < len(pixels_valid):
+            subsample = np.random.random((subsample)) * len(pixels_valid)
+            subsample = subsample.astype(np.int)
+            pixels_valid = pixels_valid[subsample]
+
         errors   = self.errors
         # get the sum of the unshifted and ungained histograms
         total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
@@ -824,6 +851,7 @@ class Histograms():
             for d in self.datas : 
                 g.create_dataset(d['name'] + ' pixels', data=d['histograms'])
                 g.create_dataset(d['name'] + ' comment', data=d['comment'])
+            f.close()
 
 
     def load_h5(self, fnam):
@@ -844,9 +872,11 @@ class Histograms():
                     data['comment']    = g[data['name'] + ' comment'].value
                     self.datas.append(data)
                     data = {}
+            f.close()
 
 
     def mask_bad_pixels(self, error_thresh=None, sigma=None):
+
         if error_thresh is not None :
             mask_pix = np.where(self.pix_map['e']>error_thresh)[0]
             print '\n ',rank,'masking', len(mask_pix),'pixels...'
@@ -856,9 +886,20 @@ class Histograms():
             self.pix_map['mu']['up'][mask_pix]   = False
         
         elif sigma is not None :
-            sig  = np.std(self.pix_map['e'])
-            mean = np.mean(self.pix_map['e'])
-            mask_pix = np.where((self.pix_map['e'] - mean) > sigma * sig)
+            errors  = comm.gather(self.pix_map['e'], root=0)
+            
+            if rank == 0 : 
+                errors = np.concatenate( tuple(errors) )
+                print errors.shape, errors.dtype
+                sig    = np.std(errors)
+                mean   = np.mean(errors)
+            else :
+                sig, mean = None, None
+            
+            sig, mean = comm.bcast([sig, mean], root=0)
+            
+            mask_pix = np.where((self.pix_map['e'] - mean) > sigma * sig)[0]
+             
             print '\n ',rank,'masking', len(mask_pix),'pixels, sig, mean, thresh', sig, mean, sigma * sig + mean
             self.pix_map['valid'][mask_pix]      = False
             self.pix_map['n']['up'][mask_pix, :] = False
