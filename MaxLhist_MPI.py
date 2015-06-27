@@ -46,7 +46,6 @@ class Histograms():
             else :
                 M = I = V = 0
             
-            comm.barrier()
             M, I, V = comm.bcast([M, I, V], root=0)
             self.M, self.I, self.V = M, I, V
             
@@ -86,7 +85,7 @@ class Histograms():
                     #Md = self.datas[d]['histograms'].shape[0]
                     #del self.datas[d]['histograms']
                     start += Md
-                    self.datas.append(data)
+                    self.datas.append(copy.deepcopy(data))
             else :
                 self.Xs      = None
                 self.pix_map = None
@@ -107,21 +106,21 @@ class Histograms():
         self.Xs = comm.bcast(self.Xs, root=0)
         
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
-        if rank == 0 : print ' len(self.pix_map)', len(self.pix_map), [len(p) for p in self.pix_map]
+        #if rank == 0 : print ' len(self.pix_map)', len(self.pix_map), [len(p) for p in self.pix_map]
         if rank == 0 :
             for i in range(1, size):
-                print ' I am rank', rank, ' sending pixel map', i, 'to rank', i
+                update_progress(float(i+1) / float(size))
+                #print ' I am rank', rank, ' sending pixel map', i, 'to rank', i
                 comm.send(self.pix_map[i], dest=i, tag=i)
-                print 'Done: I am rank', rank, ' sending pixel map', i, 'to rank', i
+                #print 'Done: I am rank', rank, ' sending pixel map', i, 'to rank', i
             
             del self.pix_map[1 :]
             self.pix_map = self.pix_map[0]
         else :
-            print ' I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+            #print ' I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
             self.pix_map = comm.recv(source = 0, tag=rank)
-            print 'Done: I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
+            #print 'Done: I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
         
-        comm.barrier()
         # this causes a seg fault for large arrays... ?
         #self.pix_map = comm.scatter(self.pix_map, root=0)
 
@@ -444,7 +443,6 @@ class Histograms():
                 self.pix_map[m]['e'] = 0.0
         
         # reduce the errors to the master
-        comm.barrier()
         valid = np.where(self.pix_map['valid'])
         error = comm.reduce(np.sum(self.pix_map['e'][valid]), op=MPI.SUM, root = 0)
         if rank == 0 :
@@ -465,7 +463,6 @@ class Histograms():
     def update_counts(self):
         """
         """
-        comm.barrier()
         if rank == 0 : print '\n updating the count fractions...'
         M = float(self.pix_map['hist'].shape[0])
         
@@ -604,7 +601,6 @@ class Histograms():
 
 
     def update_Xs(self, verb=False):
-        comm.barrier()
         if rank == 0 : print '\n updating the Xs...'
         
         I  = self.Xs[0]['v'].shape[0] 
@@ -710,7 +706,6 @@ class Histograms():
                 
                 my_X[vs_up, i] = xs
         
-        comm.barrier()
         if rank == 0 : print '\n reducing the Xs to everyone...'
         self.Xs['v'][:] = comm.allreduce(my_X, op=MPI.SUM)
         
@@ -723,10 +718,18 @@ class Histograms():
         """
         Gather the results from everyone
         """
-        comm.barrier()
         if rank == 0 : print '\n gathering the pixel maps from everyone...'
-        self.pix_map = comm.gather(self.pix_map, root=0)
+        #self.pix_map = comm.gather(self.pix_map, root=0)
         
+        if rank == 0 :
+            self.pix_map = [self.pix_map]
+            for i in range(1, size):
+                update_progress(float(i+1) / float(size))
+                self.pix_map.append([])
+                self.pix_map[-1] = comm.recv(source = i, tag=i)
+        else :
+            comm.send(self.pix_map, dest=0, tag=rank)
+
         if rank == 0 :
             self.pix_map = np.concatenate( tuple(self.pix_map) )
             print ' recieved the pixel map of shape:', self.pix_map.shape
@@ -886,7 +889,7 @@ class Histograms():
             errors  = comm.gather(self.pix_map['e'], root=0)
             
             if rank == 0 : 
-                errors = np.array(errors).flatten()
+                errors = np.concatenate( tuple(errors) )
                 print errors.shape, errors.dtype
                 sig    = np.std(errors)
                 mean   = np.mean(errors)
