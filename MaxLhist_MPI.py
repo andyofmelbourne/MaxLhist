@@ -95,7 +95,7 @@ class Histograms():
             self.scatter_bcast()
             self.unshift_ungain()
             self.pixel_multiplicity()
-            self.pixel_errors()
+            #self.pixel_errors()
         
         else :
             self.load_h5(fnam_h5)

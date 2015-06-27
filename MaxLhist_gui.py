@@ -57,7 +57,11 @@ class MainWindow(QMainWindow):
         # run the script
         runstr = 'mpirun -n 10 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/'+ self.hist_fnams[n] +' '+ self.process_options['h5_data_path'] + ' -o ' + self.hist_dirs[n] + '/'
         
-        print runstr
+        # update the status
+        self.ui.tableWidget.setItem(n, 1, PyQt4.QtGui.QTableWidgetItem('running...'))
+        self.ui.tableWidget.resizeColumnsToContents()
+        
+        print '\n', runstr
         #import subprocess
         #p = subprocess.Popen([runstr], stdout=subprocess.PIPE,\
         #                               stderr=subprocess.PIPE,\
@@ -67,6 +71,10 @@ class MainWindow(QMainWindow):
         
         call([runstr], shell=True)
         print 'done...'
+        
+        # reload the table
+        self.load_hist_table(self.process_options, self.ui.tableWidget)
+
 
     def loadProcess(self):
         try :
@@ -103,7 +111,7 @@ class MainWindow(QMainWindow):
         """
         fill the histogram table 
         """
-        output_match = 'maxL-*'
+        output_match = 'maxL-r*-histogram.h5'
         
         print '\nLoading histogram file names...'
         hist_fnams = []
@@ -121,6 +129,7 @@ class MainWindow(QMainWindow):
                     status.append('----')
         
         print '\nPopulating table...'
+        tableWidget.setRowCount(0)
         for m, hfnam in enumerate(hist_fnams):
             tableWidget.insertRow(m)
             tableWidget.setItem(m, 0, PyQt4.QtGui.QTableWidgetItem(hfnam))
