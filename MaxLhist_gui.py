@@ -70,12 +70,9 @@ class MainWindow(QMainWindow):
 
     def loadProcess(self):
         fnam = './'
-        try :
-            f = open('.gui', 'r')
+        with open('.gui', 'r') as f
             fnam = f.read()
             print '.gui file:', fnam
-        finally :
-            f.close()
         
         fnam = PyQt4.QtGui.QFileDialog.getOpenFileName(\
                 directory = fnam,\
