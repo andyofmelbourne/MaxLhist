@@ -103,23 +103,28 @@ class MainWindow(QMainWindow):
         """
         fill the histogram table 
         """
-        cheetahdir   = '/home/amorgan/Desktop/nfs_home/data/fraglo/cheetah/'
-        h5_hist_path = 'data/data'
-        h5_hist_fnam = '*-histogram.h5'
+        output_match = 'maxL-*'
         
         print '\nLoading histogram file names...'
         hist_fnams = []
         hist_dirs  = []
+        status  = []
         for dirname, dirnames, filenames in os.walk(process_options['h5_hist_path']):
             for filename in fnmatch.filter(filenames, process_options['h5_hist_fnam']):
                 hist_fnams.append(filename)
                 hist_dirs.append(dirname)
                 print filename
+            
+                if fnmatch.filter(filenames, output_match) != []:
+                    status.append('done')
+                else :
+                    status.append('----')
         
         print '\nPopulating table...'
         for m, hfnam in enumerate(hist_fnams):
             tableWidget.insertRow(m)
             tableWidget.setItem(m, 0, PyQt4.QtGui.QTableWidgetItem(hfnam))
+            tableWidget.setItem(m, 1, PyQt4.QtGui.QTableWidgetItem(status[m]))
         
         tableWidget.resizeColumnsToContents()
         tableWidget.resizeRowsToContents()
