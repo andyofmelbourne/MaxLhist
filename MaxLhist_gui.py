@@ -50,12 +50,13 @@ class MainWindow(QMainWindow):
         
         # export MaxLhist_MPI
         from subprocess import call
-        print os.path.abspath('.')
-        print 'export PYTHONPATH=$PYTHONPATH:' + os.path.abspath('./')+'/'
-        call(['export PYTHONPATH=$PYTHONPATH:' + os.path.abspath('./')+'/'], shell=True)
+        if os.environ.has_key('PYTHONPATH'):
+            os.environ['PYTHONPATH'] += os.path.abspath('./')+'/'
+        else :
+            os.environ['PYTHONPATH'] = os.path.abspath('./')+'/'
         
         # run the script
-        runstr = 'mpirun -n 10 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/'+ self.hist_fnams[n] +' '+ self.process_options['h5_data_path'] + ' -o ' + self.hist_dirs[n] + '/'
+        runstr = 'mpirun -n 4 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/'+ self.hist_fnams[n] +' '+ self.process_options['h5_data_path'] + ' -o ' + self.hist_dirs[n] + '/'
         
         # update the status
         self.ui.tableWidget.setItem(n, 1, PyQt4.QtGui.QTableWidgetItem('running...'))
