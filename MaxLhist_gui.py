@@ -51,11 +51,11 @@ class MainWindow(QMainWindow):
         # export MaxLhist_MPI
         from subprocess import call
         print os.path.abspath('.')
-        print 'export PYTHONPATH+=:' + os.path.abspath('./')+'/'
-        call(['export PYTHONPATH+=:' + os.path.abspath('./')+'/'], shell=True)
+        print 'export PYTHONPATH=$PYTHONPATH:' + os.path.abspath('./')+'/'
+        call(['export PYTHONPATH=$PYTHONPATH:' + os.path.abspath('./')+'/'], shell=True)
         
         # run the script
-        runstr = 'mpirun -n 4 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/'+ self.hist_fnams[n] +' '+ self.process_options['h5_data_path'] + ' -o ' + self.hist_dirs[n] + '/'
+        runstr = 'mpirun -n 10 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/'+ self.hist_fnams[n] +' '+ self.process_options['h5_data_path'] + ' -o ' + self.hist_dirs[n] + '/'
         
         print runstr
         #import subprocess
@@ -69,10 +69,12 @@ class MainWindow(QMainWindow):
         print 'done...'
 
     def loadProcess(self):
-        fnam = './'
-        with open('.gui', 'r') as f
-            fnam = f.read()
-            print '.gui file:', fnam
+        try :
+            with open('.gui', 'r') as f:
+                fnam = f.read()
+                print '.gui file:', fnam
+        except :
+            fnam = './'
         
         fnam = PyQt4.QtGui.QFileDialog.getOpenFileName(\
                 directory = fnam,\
