@@ -899,7 +899,7 @@ class Histograms():
             self.Xs = self.pix_map = self.errors = None
 
 
-    def load_subsample_h5(self, fnam, subsample=10000):
+    def load_subsample_h5(self, fnam, subsample=2000):
         if rank == 0 :
             
             f = h5py.File(fnam, 'r')

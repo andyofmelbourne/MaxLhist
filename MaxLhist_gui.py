@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
         self.ui.actionUpdate_gain_offsets.triggered.connect(self.update_gain_offsets)
         self.ui.actionUpdate_Xs.triggered.connect(self.update_Xs)
         self.ui.actionUpdate_counts.triggered.connect(self.update_counts)
+        self.ui.actionRefresh_table.triggered.connect(lambda : self.load_hist_table(self.process_options, self.ui.tableWidget))
         
         self.ui.tableWidget.setEditTriggers( PyQt4.QtGui.QTableWidget.NoEditTriggers )
         self.ui.tableWidget.itemDoubleClicked.connect( self.preview_results )
@@ -110,7 +111,7 @@ class MainWindow(QMainWindow):
             self.ui.actionUpdate_gain_offsets.setEnabled(False)
             self.ui.actionUpdate_Xs.setEnabled(False)
             self.ui.actionUpdate_counts.setEnabled(False)
-            print '\nNo maxL data nothing to do...'
+            print '\nNo maxL data nothing to do... status = ', self.status[n]
             self.clear_preview()
 
 
@@ -151,8 +152,7 @@ class MainWindow(QMainWindow):
         ftot = np.sum([fi(i) for i in range(H.Xs.shape[0])], axis=0) 
         
         # display
-        self.hist_proj_plotitem = self.hist_projWidget.plot(fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
-        self.hist_proj_plotitem.setData(hist_proj + 1.0e-10)
+        self.hist_projWidget.plot(np.arange(hist_proj.shape[0]+1), hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
          
         f_tot           = np.zeros_like(H.Xs['v'][0])
         for i in range(H.Xs.shape[0]):
@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
         # now plot the histograms
         m      = 0
         title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
-        curve_his = self.hists_Widget.plot(hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        curve_his = self.hists_Widget.plot(np.arange(hists[m].shape[0] + 1), hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
         curve_fit = self.hists_Widget.plot(H.hist_fit(H.pix_map[pixels_valid][m], H.Xs), pen = (0, 255, 0))
         self.hists_Widget.setXLink('f')
         def replot():
@@ -171,13 +171,13 @@ class MainWindow(QMainWindow):
             m = m_sort[m]
             title = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
             self.hists_Widget.setTitle(title)
-            curve_his.setData(hists[m])
+            curve_his.setData(np.arange(hists[m].shape[0] + 1), hists[m])
             curve_fit.setData(H.hist_fit(H.pix_map[pixels_valid][m], H.Xs))
         
         # plot the pixel errors
         self.hists_e_Widget.plot(p_errors[m_sort], pen=(255, 255, 255))
         self.hists_e_Widget.setXLink('mus')
-
+    
         hline = pg.InfiniteLine(angle=90, movable=True, bounds = [0, mus.shape[0]-1])
         hline.sigPositionChanged.connect(replot)
         self.hists_e_Widget.addItem(hline)
@@ -220,6 +220,10 @@ class MainWindow(QMainWindow):
         """
         fill the histogram table 
         """
+        if process_options is None :
+            print '\nNo process file loaded. Nothing to do...'
+            return 
+        
         output_match = 'maxL-r*-histogram.h5'
         
         print '\nLoading histogram file names...'
@@ -237,20 +241,25 @@ class MainWindow(QMainWindow):
                 else :
                     status.append('----')
         
+        hist_fnams = np.array(hist_fnams)
+        hist_dirs  = np.array(hist_dirs)
+        status     = np.array(status)
+        m_sort     = np.argsort(hist_fnams)
+
         print '\nPopulating table...'
         tableWidget.setRowCount(0)
-        for m, hfnam in enumerate(hist_fnams):
+        for m, (hfnam, stat) in enumerate(zip(hist_fnams[m_sort], status[m_sort])):
             tableWidget.insertRow(m)
             tableWidget.setItem(m, 0, PyQt4.QtGui.QTableWidgetItem(hfnam))
-            tableWidget.setItem(m, 1, PyQt4.QtGui.QTableWidgetItem(status[m]))
+            tableWidget.setItem(m, 1, PyQt4.QtGui.QTableWidgetItem(stat))
         
         tableWidget.resizeColumnsToContents()
         tableWidget.resizeRowsToContents()
         
         #self.resize(self.sizeHint())
-        self.hist_fnams = hist_fnams
-        self.hist_dirs  = hist_dirs
-        self.status     = status
+        self.hist_fnams = hist_fnams[m_sort]
+        self.hist_dirs  = hist_dirs[m_sort]
+        self.status     = status[m_sort]
 
 
     def update_gain_offsets(self):

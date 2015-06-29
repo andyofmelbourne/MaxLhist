@@ -21,7 +21,7 @@
        <set>QAbstractItemView::NoEditTriggers</set>
       </property>
       <property name="sortingEnabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="rowCount">
        <number>0</number>
@@ -88,6 +88,7 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actionRunMaxL"/>
+   <addaction name="actionRefresh_table"/>
    <addaction name="actionUpdate_gain_offsets"/>
    <addaction name="actionUpdate_Xs"/>
    <addaction name="actionUpdate_counts"/>
@@ -129,6 +130,11 @@
   <action name="actionAdd_variable">
    <property name="text">
     <string>add variable</string>
+   </property>
+  </action>
+  <action name="actionRefresh_table">
+   <property name="text">
+    <string>Refresh table</string>
    </property>
   </action>
  </widget>
