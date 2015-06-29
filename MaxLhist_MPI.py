@@ -51,10 +51,10 @@ class Histograms():
             
             # set the numpy dtypes
             #---------------------
-            dt_n  = np.dtype([('v', np.float64, (V,)), ('up', np.bool, (V,))]) 
-            dt_g  = np.dtype([('v', np.float64), ('up', np.bool)]) 
-            dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float64, (I,)),\
-                              ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float64), ('e', np.float64)])
+            dt_n  = np.dtype([('v', np.float32, (V,)), ('up', np.bool, (V,))]) 
+            dt_g  = np.dtype([('v', np.float32), ('up', np.bool)]) 
+            dt_pm = np.dtype([('pix', np.uint32), ('hist', np.uint32, (I,)), ('hist_cor', np.float32, (I,)),\
+                              ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float32), ('e', np.float32)])
             dt_Xs = np.dtype([('v', np.float64, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
             self.dt_pm = dt_pm
             self.dt_Xs = dt_Xs
@@ -110,20 +110,13 @@ class Histograms():
         if rank == 0 :
             for i in range(1, size):
                 update_progress(float(i+1) / float(size))
-                #print ' I am rank', rank, ' sending pixel map', i, 'to rank', i
                 comm.send(self.pix_map[i], dest=i, tag=i)
-                #print 'Done: I am rank', rank, ' sending pixel map', i, 'to rank', i
             
             del self.pix_map[1 :]
             self.pix_map = self.pix_map[0]
         else :
-            #print ' I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
             self.pix_map = comm.recv(source = 0, tag=rank)
-            #print 'Done: I am rank', rank, ' receiving pixel map', rank, 'from rank 0'
         
-        # this causes a seg fault for large arrays... ?
-        #self.pix_map = comm.scatter(self.pix_map, root=0)
-
 
     def check_input(self, datas):
         """
