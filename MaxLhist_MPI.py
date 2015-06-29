@@ -95,7 +95,7 @@ class Histograms():
             self.scatter_bcast()
             self.unshift_ungain()
             self.pixel_multiplicity()
-            self.pixel_errors()
+            #self.pixel_errors()
         
         else :
             self.load_h5(fnam_h5)
@@ -911,12 +911,14 @@ def load_display(fnam):
     H = Histograms(fnam_h5 = fnam)
     H.show()
 
+
 def chunkIt(seq, num):
     splits = np.mgrid[0:len(seq):(num+1)*1J].astype(np.int)
     out    = []
     for i in range(splits.shape[0]-1):
         out.append(seq[splits[i]:splits[i+1]])
     return out
+
 
 def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
     """
@@ -1008,6 +1010,7 @@ def update_progress(progress):
     text = "\rPercent: [{0}] {1:.1f}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
     sys.stdout.write(text)
     sys.stdout.flush()
+
 
 if __name__ == '__main__':
     print 'executing :', sys.argv[1]
