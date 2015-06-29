@@ -836,10 +836,17 @@ class Histograms():
 
     def dump_h5(self, fnam):
         if rank == 0 :
+            print '\nProjecting the corrected histograms...'
+            pixels       = self.pix_map['pix']
+            pixels_valid = np.where(self.pix_map['valid'])[0]
+            total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
+            hist_proj    = np.sum(self.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
+
             f = h5py.File(fnam, 'w')
             f.create_dataset('pix_map', data=self.pix_map)
             f.create_dataset('Xs'     , data=self.Xs)
             f.create_dataset('errors' , data=np.array(self.errors))
+            f.create_dataset('hist_proj' , data=hist_proj)
             g = f.create_group('hist_pixels')
             for d in self.datas : 
                 g.create_dataset(d['name'] + ' pixels', data=d['histograms'])
