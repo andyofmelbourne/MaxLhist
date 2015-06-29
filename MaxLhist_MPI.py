@@ -4,7 +4,7 @@ import forward_model as fm
 import utils as ut
 from scipy.ndimage import gaussian_filter1d
 from scipy.special import gammaln
-import sys
+import sys, os
 import copy
 from mpi4py import MPI
 import h5py
@@ -35,7 +35,7 @@ size = comm.Get_size()
 
 
 class Histograms():
-    def __init__(self, datas = None, fnam_h5 = None):
+    def __init__(self, datas = None, fnam_h5 = None, fnam_sub_h5 = None):
         """
         """
         if datas is not None :
@@ -97,8 +97,11 @@ class Histograms():
             self.pixel_multiplicity()
             #self.pixel_errors()
         
-        else :
+        elif fnam_h5 is not None :
             self.load_h5(fnam_h5)
+        
+        elif fnam_sub_h5 is not None :
+            self.load_subsample_h5(fnam_sub_h5)
 
 
     def scatter_bcast(self):
@@ -836,12 +839,28 @@ class Histograms():
 
     def dump_h5(self, fnam):
         if rank == 0 :
+            
+            # check that the directory exists and is a directory
+            output_dir = os.path.split( os.path.realpath(fnam) )[0]
+            if os.path.exists(output_dir) == False :
+                raise ValueError('specified path does not exist: ', output_dir)
+            
+            if os.path.isdir(output_dir) == False :
+                raise ValueError('specified path is not a path you dummy: ', output_dir)
+            
+            # see if it exists
+            # and if so delete it 
+            # (probably dangerous but otherwise this gets really anoying for debuging)
+            if os.path.exists(fnam):
+                print '\n', fnam ,'file already exists, deleting the old one and making a new one'
+                os.remove(fnam)
+            
             print '\nProjecting the corrected histograms...'
             pixels       = self.pix_map['pix']
             pixels_valid = np.where(self.pix_map['valid'])[0]
             total_counts = np.sum(self.pix_map['hist_cor'][pixels_valid])
             hist_proj    = np.sum(self.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
-
+            
             f = h5py.File(fnam, 'w')
             f.create_dataset('pix_map', data=self.pix_map)
             f.create_dataset('Xs'     , data=self.Xs)
@@ -875,8 +894,38 @@ class Histograms():
             f.close()
 
 
-    def mask_bad_pixels(self, error_thresh=None, sigma=None):
+    def load_subsample_h5(self, fnam, subsample=10000):
+        if rank == 0 :
+            
+            f = h5py.File(fnam, 'r')
+            
+            inds = np.zeros((f['pix_map'].shape[0]), dtype=np.bool)
+            if subsample is not None and subsample < f['pix_map'].shape[0]:
+                subsample = np.random.random((subsample)) * f['pix_map'].shape[0]
+                subsample = subsample.astype(np.int)
+                inds[subsample] = True
+            else :
+                inds[:] = True
+            
+            self.pix_map   = f['pix_map'][inds]
+            self.hist_proj = f['hist_proj'].value
+            self.Xs        = f['Xs'].value
+            self.errors    = list(f['errors'].value)
+            #
+            # get the dataset pixels name and comment
+            g          = f['hist_pixels']
+            self.datas = []
+            data       = {}
+            for k in g.keys():
+                if k.find('pixels') != -1 :
+                    data['name']       = k[: k.find('pixels')-1]
+                    data['histograms'] = g[k].value
+                    data['comment']    = g[data['name'] + ' comment'].value
+                    self.datas.append(data)
+                    data = {}
+            f.close()
 
+    def mask_bad_pixels(self, error_thresh=None, sigma=None):
         if error_thresh is not None :
             mask_pix = np.where(self.pix_map['e']>error_thresh)[0]
             print '\n ',rank,'masking', len(mask_pix),'pixels...'

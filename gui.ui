@@ -6,16 +6,16 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>398</width>
-    <height>431</height>
+    <width>882</width>
+    <height>771</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
      <widget class="QTableWidget" name="tableWidget">
       <property name="editTriggers">
        <set>QAbstractItemView::NoEditTriggers</set>
@@ -41,6 +41,19 @@
       </column>
      </widget>
     </item>
+    <item>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <widget class="PlotWidget" name="graphicsView"/>
+      </item>
+      <item>
+       <widget class="PlotWidget" name="graphicsView_2"/>
+      </item>
+      <item>
+       <widget class="PlotWidget" name="graphicsView_3"/>
+      </item>
+     </layout>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -48,7 +61,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>398</width>
+     <width>882</width>
      <height>25</height>
     </rect>
    </property>
@@ -62,6 +75,9 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QToolBar" name="toolBar">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
    <property name="windowTitle">
     <string>toolBar</string>
    </property>
@@ -72,6 +88,9 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actionRunMaxL"/>
+   <addaction name="actionUpdate_gain_offsets"/>
+   <addaction name="actionUpdate_Xs"/>
+   <addaction name="actionUpdate_counts"/>
   </widget>
   <action name="actionLoad_process_file">
    <property name="text">
@@ -83,7 +102,43 @@
     <string>RunMaxL</string>
    </property>
   </action>
+  <action name="actionUpdate_gain_offsets">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Update gain/offsets</string>
+   </property>
+  </action>
+  <action name="actionUpdate_Xs">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Update Xs</string>
+   </property>
+  </action>
+  <action name="actionUpdate_counts">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Update counts</string>
+   </property>
+  </action>
+  <action name="actionAdd_variable">
+   <property name="text">
+    <string>add variable</string>
+   </property>
+  </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -7,16 +7,12 @@ from PyQt4.QtGui import QMainWindow
 import PyQt4.uic
 from PyQt4.QtGui import QApplication
 import ConfigParser
+import h5py
+import numpy as np
+import MaxLhist_MPI
+import pyqtgraph as pg
 
 Ui_MainWindow, QMainWindow = PyQt4.uic.loadUiType('gui.ui')
-
-
-def config_writer(h5dir, h5fnam, init=True):
-    """
-    Write a config file for MaxL_hist and put it into h5dir
-    """
-    pass
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -27,10 +23,28 @@ class MainWindow(QMainWindow):
         # Set up the user interface from Designer.
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-
+        
         self.ui.statusbar.showMessage('Load a process.config file...')
         self.ui.actionLoad_process_file.triggered.connect(self.loadProcess)
         self.ui.actionRunMaxL.triggered.connect(self.runMaxL)
+        
+        self.ui.tableWidget.setEditTriggers( PyQt4.QtGui.QTableWidget.NoEditTriggers )
+        self.ui.tableWidget.itemDoubleClicked.connect( self.preview_results )
+
+        self.hist_projWidget = self.ui.graphicsView
+        self.hist_projWidget.setTitle('projected histogram')
+        self.hist_projWidget.setLabel('bottom', text = 'adus')
+        self.hist_projWidget.setLabel('left', text = 'frequency normalised')
+        
+        self.hists_Widget = self.ui.graphicsView_2
+        self.hists_Widget.setTitle(title='pixel histograms')
+        self.hists_Widget.setLabel('bottom', text = 'adus')
+        self.hists_Widget.setLabel('left', text = 'frequency')
+        
+        self.hists_e_Widget = self.ui.graphicsView_3
+        self.hists_e_Widget.setTitle(title='pixel errors', name = 'p_errors')
+        self.hists_e_Widget.setLabel('bottom', text = 'index')
+        self.hists_e_Widget.setLabel('left', text = 'log likelihood error')
 
     def runMaxL(self):
         if self.process_options is None :
@@ -76,6 +90,94 @@ class MainWindow(QMainWindow):
         # reload the table
         self.load_hist_table(self.process_options, self.ui.tableWidget)
 
+    def preview_results(self, QwidgetItem):
+        # get the result's fnam
+        n    = QwidgetItem.row()
+        if self.status[n] == 'done' :
+            self.ui.actionUpdate_gain_offsets.setEnabled(True)
+            self.ui.actionUpdate_Xs.setEnabled(True)
+            self.ui.actionUpdate_counts.setEnabled(True)
+             
+            fnam = self.hist_dirs[n] + '/maxL-'+self.hist_fnams[n]
+            print '\nloading:', fnam 
+            
+            H = MaxLhist_MPI.Histograms(fnam_sub_h5 = fnam)
+            
+            self.show_preview(H)
+        else :
+            self.ui.actionUpdate_gain_offsets.setEnabled(False)
+            self.ui.actionUpdate_Xs.setEnabled(False)
+            self.ui.actionUpdate_counts.setEnabled(False)
+            print '\nNo maxL data nothing to do...'
+            self.clear_preview()
+
+    def clear_preview(self):
+        self.hist_projWidget.clear()
+        self.hists_Widget.clear()
+        self.hists_e_Widget.clear()
+
+    def show_preview(self, H):
+        """
+        display:
+        the projected histogram
+        the fits to the proj hist
+        """
+        self.clear_preview()
+        pixels       = H.pix_map['pix']
+        pixels_valid = np.where(H.pix_map['valid'])[0]
+         
+        mus_name  = 'offset'
+        gs_name   = 'gain'
+        errors    = H.errors
+        total_counts = np.sum(H.pix_map['hist_cor'][pixels_valid])
+        hist_proj    = np.sum(H.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
+        p_errors  = H.pix_map['e'][pixels_valid]
+        m_sort    = np.argsort(p_errors)
+        mus       = H.pix_map['mu']['v'][pixels_valid]
+        gs        = H.pix_map['g']['v'][pixels_valid]
+        hists     = H.pix_map['hist'][pixels_valid]
+        hists_cor = H.pix_map['hist_cor'][pixels_valid]
+        ns        = H.pix_map['n']['v'][pixels_valid]
+        
+        # show f and the mu values
+        counts = np.sum(H.pix_map['hist'][pixels_valid], axis=-1)
+        total_counts = np.sum(counts)
+        
+        fi   = lambda f: H.Xs['v'][i] * np.sum(ns[:, i] * counts) / float(total_counts)
+        ftot = np.sum([fi(i) for i in range(H.Xs.shape[0])], axis=0) 
+        
+        # display
+        self.hist_proj_plotitem = self.hist_projWidget.plot(fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
+        self.hist_proj_plotitem.setData(hist_proj + 1.0e-10)
+        
+        f_tot           = np.zeros_like(H.Xs['v'][0])
+        for i in range(H.Xs.shape[0]):
+            self.hist_projWidget.plot(y = fi(i) + 1.0e-10, pen=(i, len(H.Xs)+1), width = 10)
+        
+        self.hist_projWidget.plot(y = ftot + 1.0e-10, pen=(len(H.Xs), len(H.Xs)+1), width = 10)
+
+        # now plot the histograms
+        m      = 0
+        title  = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
+        curve_his = self.hists_Widget.plot(hists[m], fillLevel = 0.0, fillBrush = 0.7, stepMode = False)
+        curve_fit = self.hists_Widget.plot(H.hist_fit(H.pix_map[pixels_valid][m], H.Xs), pen = (0, 255, 0))
+        self.hists_Widget.setXLink('f')
+        def replot():
+            m = hline.value()
+            m = m_sort[m]
+            title = "histogram pixel " + str(m) + ' error ' + str(int(p_errors[m])) + ' offset {0:.1f}'.format(mus[m]) + ' inv. gain {0:.1f}'.format(gs[m])
+            self.hists_Widget.setTitle(title)
+            curve_his.setData(hists[m])
+            curve_fit.setData(H.hist_fit(H.pix_map[pixels_valid][m], H.Xs))
+        
+        # plot the pixel errors
+        self.hists_e_Widget.plot(p_errors[m_sort], pen=(255, 255, 255))
+        self.hists_e_Widget.setXLink('mus')
+
+        hline = pg.InfiniteLine(angle=90, movable=True, bounds = [0, mus.shape[0]-1])
+        hline.sigPositionChanged.connect(replot)
+        self.hists_e_Widget.addItem(hline)
+
 
     def loadProcess(self):
         try :
@@ -98,6 +200,7 @@ class MainWindow(QMainWindow):
         self.process_options = self.load_process_file(self.process_file)
         self.load_hist_table(self.process_options, self.ui.tableWidget)
     
+
     def load_process_file(self, process_file):
         config = ConfigParser.SafeConfigParser()
         config.read(process_file)
@@ -107,6 +210,7 @@ class MainWindow(QMainWindow):
         for key in options.keys():
             print key, options[key]
         return options
+
 
     def load_hist_table(self, process_options, tableWidget):
         """
@@ -139,13 +243,13 @@ class MainWindow(QMainWindow):
         tableWidget.resizeColumnsToContents()
         tableWidget.resizeRowsToContents()
         
-        self.resize(self.sizeHint())
+        #self.resize(self.sizeHint())
         self.hist_fnams = hist_fnams
         self.hist_dirs  = hist_dirs
+        self.status     = status
 
 
 if __name__ == "__main__":
-    
     app    = QApplication(sys.argv)
     window = MainWindow()
     
