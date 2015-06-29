@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 import MaxLhist_MPI
 import pyqtgraph as pg
+from subprocess import call
 
 Ui_MainWindow, QMainWindow = PyQt4.uic.loadUiType('gui.ui')
 
@@ -27,6 +28,9 @@ class MainWindow(QMainWindow):
         self.ui.statusbar.showMessage('Load a process.config file...')
         self.ui.actionLoad_process_file.triggered.connect(self.loadProcess)
         self.ui.actionRunMaxL.triggered.connect(self.runMaxL)
+        self.ui.actionUpdate_gain_offsets.triggered.connect(self.update_gain_offsets)
+        self.ui.actionUpdate_Xs.triggered.connect(self.update_Xs)
+        self.ui.actionUpdate_counts.triggered.connect(self.update_counts)
         
         self.ui.tableWidget.setEditTriggers( PyQt4.QtGui.QTableWidget.NoEditTriggers )
         self.ui.tableWidget.itemDoubleClicked.connect( self.preview_results )
@@ -46,6 +50,7 @@ class MainWindow(QMainWindow):
         self.hists_e_Widget.setLabel('bottom', text = 'index')
         self.hists_e_Widget.setLabel('left', text = 'log likelihood error')
 
+
     def runMaxL(self):
         if self.process_options is None :
             self.ui.statusbar.showMessage('You need to load some histograms!')
@@ -63,7 +68,6 @@ class MainWindow(QMainWindow):
         self.ui.statusbar.showMessage('loaded algorithm:' + self.alg_file)
         
         # export MaxLhist_MPI
-        from subprocess import call
         if os.environ.has_key('PYTHONPATH'):
             os.environ['PYTHONPATH'] += os.path.abspath('./')+'/'
         else :
@@ -77,18 +81,16 @@ class MainWindow(QMainWindow):
         self.ui.tableWidget.resizeColumnsToContents()
         
         print '\n', runstr
-        #import subprocess
-        #p = subprocess.Popen([runstr], stdout=subprocess.PIPE,\
-        #                               stderr=subprocess.PIPE,\
-        #                               shell=True)
-        #out, err = p.communicate()
-        #print out
         
         call([runstr], shell=True)
         print 'done...'
         
         # reload the table
         self.load_hist_table(self.process_options, self.ui.tableWidget)
+        
+        # reload the preview
+        self.preview_results(self.ui.tableWidget.currentItem())
+        
 
     def preview_results(self, QwidgetItem):
         # get the result's fnam
@@ -111,10 +113,12 @@ class MainWindow(QMainWindow):
             print '\nNo maxL data nothing to do...'
             self.clear_preview()
 
+
     def clear_preview(self):
         self.hist_projWidget.clear()
         self.hists_Widget.clear()
         self.hists_e_Widget.clear()
+
 
     def show_preview(self, H):
         """
@@ -149,7 +153,7 @@ class MainWindow(QMainWindow):
         # display
         self.hist_proj_plotitem = self.hist_projWidget.plot(fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
         self.hist_proj_plotitem.setData(hist_proj + 1.0e-10)
-        
+         
         f_tot           = np.zeros_like(H.Xs['v'][0])
         for i in range(H.Xs.shape[0]):
             self.hist_projWidget.plot(y = fi(i) + 1.0e-10, pen=(i, len(H.Xs)+1), width = 10)
@@ -248,6 +252,95 @@ class MainWindow(QMainWindow):
         self.hist_dirs  = hist_dirs
         self.status     = status
 
+
+    def update_gain_offsets(self):
+        n = self.ui.tableWidget.currentRow()
+        print 'current histdir and name:', self.hist_dirs[n], self.hist_fnams[n]
+
+        # get the selected algorithm 
+        fnam = 'update_gain_offsets.py'
+        self.alg_file  = str(fnam)
+        self.ui.statusbar.showMessage('loaded algorithm:' + self.alg_file)
+        
+        # run the script
+        runstr = 'mpirun -n 4 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/maxL-'+ self.hist_fnams[n] +' ' + ' -o ' + self.hist_dirs[n] + '/'
+        
+        # update the status
+        self.ui.tableWidget.setItem(n, 1, PyQt4.QtGui.QTableWidgetItem('running...'))
+        self.ui.tableWidget.resizeColumnsToContents()
+        
+        print '\n', runstr
+        
+        call([runstr], shell=True)
+        print 'done...'
+        
+        # reload the table
+        self.load_hist_table(self.process_options, self.ui.tableWidget)
+        
+        # reload the preview
+        Item = self.ui.tableWidget.currentItem()
+        if Item is not None :
+            self.preview_results(Item)
+
+
+    def update_Xs(self):
+        n = self.ui.tableWidget.currentRow()
+        print 'current histdir and name:', self.hist_dirs[n], self.hist_fnams[n]
+
+        # get the selected algorithm 
+        fnam = 'update_Xs.py'
+        self.alg_file  = str(fnam)
+        self.ui.statusbar.showMessage('loaded algorithm:' + self.alg_file)
+        
+        # run the script
+        runstr = 'mpirun -n 4 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/maxL-'+ self.hist_fnams[n] +' ' + ' -o ' + self.hist_dirs[n] + '/'
+        
+        # update the status
+        self.ui.tableWidget.setItem(n, 1, PyQt4.QtGui.QTableWidgetItem('running...'))
+        self.ui.tableWidget.resizeColumnsToContents()
+        
+        print '\n', runstr
+        
+        call([runstr], shell=True)
+        print 'done...'
+        
+        # reload the table
+        self.load_hist_table(self.process_options, self.ui.tableWidget)
+        
+        # reload the preview
+        Item = self.ui.tableWidget.currentItem()
+        if Item is not None :
+            self.preview_results(Item)
+
+
+    def update_counts(self):
+        n = self.ui.tableWidget.currentRow()
+        print 'current histdir and name:', self.hist_dirs[n], self.hist_fnams[n]
+
+        # get the selected algorithm 
+        fnam = 'update_counts.py'
+        self.alg_file  = str(fnam)
+        self.ui.statusbar.showMessage('loaded algorithm:' + self.alg_file)
+        
+        # run the script
+        runstr = 'mpirun -n 4 python ' + self.alg_file + ' ' + self.hist_dirs[n] +'/maxL-'+ self.hist_fnams[n] +' ' + ' -o ' + self.hist_dirs[n] + '/'
+        
+        # update the status
+        self.ui.tableWidget.setItem(n, 1, PyQt4.QtGui.QTableWidgetItem('running...'))
+        self.ui.tableWidget.resizeColumnsToContents()
+        
+        print '\n', runstr
+        
+        call([runstr], shell=True)
+        print 'done...'
+        
+        # reload the table
+        self.load_hist_table(self.process_options, self.ui.tableWidget)
+        
+        # reload the preview
+        Item = self.ui.tableWidget.currentItem()
+        if Item is not None :
+            self.preview_results(Item)
 
 if __name__ == "__main__":
     app    = QApplication(sys.argv)

@@ -47,7 +47,6 @@ class Histograms():
                 M = I = V = 0
             
             M, I, V = comm.bcast([M, I, V], root=0)
-            self.M, self.I, self.V = M, I, V
             
             # set the numpy dtypes
             #---------------------
@@ -66,7 +65,7 @@ class Histograms():
                 pix_map, Xs  = self.process_input(datas, vars, M, I, V)
                 pix_map, Xs  = self.init_input(datas, vars, pix_map, Xs)
                 
-                self.pix_map = chunkIt(pix_map, size)
+                self.pix_map = pix_map 
                 self.Xs      = Xs
 
                 # I need to remember which dataset belongs to 
@@ -111,6 +110,7 @@ class Histograms():
         if rank == 0 : print '\n scattering the pixel maps to everyone...'
         #if rank == 0 : print ' len(self.pix_map)', len(self.pix_map), [len(p) for p in self.pix_map]
         if rank == 0 :
+            self.pix_map = chunkIt(self.pix_map, size)
             for i in range(1, size):
                 update_progress(float(i+1) / float(size))
                 comm.send(self.pix_map[i], dest=i, tag=i)
@@ -120,6 +120,9 @@ class Histograms():
         else :
             self.pix_map = comm.recv(source = 0, tag=rank)
         
+        I = self.Xs['v'][0].shape[0]
+        self.adus    = chunkIt(np.arange(I), size)
+
 
     def check_input(self, datas):
         """
@@ -626,7 +629,7 @@ class Histograms():
 
         # get the hist_cor's for our adu's
         hist_cor = []
-        for i in range(self.I):
+        for i in range(I):
             rank_i = [np.any(self.adus[j] == i) for j in range(size)].index(True)
             h      = comm.gather(self.pix_map['hist_cor'][my_valid, i], root = rank_i)
             if h is not None :
@@ -892,6 +895,8 @@ class Histograms():
                     self.datas.append(data)
                     data = {}
             f.close()
+        else :
+            self.Xs = self.pix_map = self.errors = None
 
 
     def load_subsample_h5(self, fnam, subsample=10000):
