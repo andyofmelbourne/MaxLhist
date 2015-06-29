@@ -51,10 +51,10 @@ class Histograms():
             
             # set the numpy dtypes
             #---------------------
-            dt_n  = np.dtype([('v', np.float64, (V,)), ('up', np.bool, (V,))]) 
-            dt_g  = np.dtype([('v', np.float64), ('up', np.bool)]) 
-            dt_pm = np.dtype([('pix', np.int64), ('hist', np.uint64, (I,)), ('hist_cor', np.float64, (I,)),\
-                              ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float64), ('e', np.float64)])
+            dt_n  = np.dtype([('v', np.float16, (V,)), ('up', np.bool, (V,))]) 
+            dt_g  = np.dtype([('v', np.float16), ('up', np.bool)]) 
+            dt_pm = np.dtype([('pix', np.uint32), ('hist', np.uint16, (I,)), ('hist_cor', np.float16, (I,)),\
+                              ('g', dt_g), ('mu', dt_g), ('n', dt_n), ('valid', np.bool), ('m', np.float16), ('e', np.float16)])
             dt_Xs = np.dtype([('v', np.float64, (I,)), ('up', np.bool, (I,)), ('name', np.str_, 128),  ('type', np.str_, 128)])
             self.dt_pm = dt_pm
             self.dt_Xs = dt_Xs
