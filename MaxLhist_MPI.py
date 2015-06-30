@@ -459,11 +459,11 @@ class Histograms():
         return f
         
 
-    def update_counts(self):
+    def update_counts(self, N=5, iters=10):
         """
         """
-        if rank == 0 : print '\n updating the count fractions...'
         M = float(self.pix_map['hist'].shape[0])
+        if rank == 0 : print '\n updating the count fractions...', M
         
         for m, p in enumerate(self.pix_map):
             if rank == 0 : update_progress(float(m + 1) / M)
@@ -882,6 +882,7 @@ class Histograms():
             self.pix_map = f['pix_map'].value
             self.Xs      = f['Xs'].value
             self.errors  = list(f['errors'].value)
+            self.hist_proj = f['hist_proj'].value
             #
             # get the dataset pixels name and comment
             g          = f['hist_pixels']
@@ -1045,6 +1046,76 @@ def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
         X = [grid_X[j][i] for j in range(len(A))]
     return X
 
+def grid_condition_boundaries_ND(err, A, b, bounds, N=10, iters=10):
+    """
+    find the minimum of err(X) such that:
+    A . X = b
+    bounds[i][0] <= Xi <= bounds[i][1]
+    by grid searching.
+
+    A = list or 1d array of length M
+    b = scalar
+    bounds = list (M) of tuples or lists (2) 
+    err must take an array of X values of shape M**M 
+    e.g. err(np.array([X0, X1, ... XM-1]))
+    
+    -set X0 = b - Aj . Xj , j>0
+    -make a grid of values for Xj in the bounds
+    -manually evaluate that the bounds are satisfied at each grid point
+    -find minimum of err at these points
+    -then zoom and repeat
+    """
+    # zoom
+    for n in range(iters):
+        if n == 0 :
+            dom   = []
+            steps = []
+            for bound in bounds[1 :]:
+                x, step = np.linspace(bound[0], bound[1], N, endpoint=True, retstep=True)
+                dom.append(x)
+                steps.append(step)
+        else :
+            # make the domain within the new bounds
+            steps_old = list(steps)
+            dom   = []
+            steps = []
+            for step_old, xmin, bound in zip(steps_old, X[1 :], bounds[1 :]):
+                x, step = np.linspace(max([xmin-step_old, bound[0]]), min([xmin+step_old, bound[1]]), N, endpoint=True, retstep=True)
+                dom.append(x)
+                steps.append(step)
+        
+        # make the grid:
+        if len(dom) > 1 :
+            grid_X = np.meshgrid(*dom, copy=False, indexing='ij')
+        else :
+            grid_X = dom
+
+        # evaluate X0 
+        if A[0] <= 0.0 :
+            print '\n Warning A[0] <= 0.0, setting to zero'
+            return [0.0 for i in range(len(A))]
+        
+        X0  = (b - np.sum( [A[i+1] * grid_X[i] for i in range(0, len(A)-1)], axis=0)) / A[0]
+
+        # evaluate the mask 
+        mask = (X0 > bounds[0][0]) * (X0 < bounds[0][1])
+        if not np.any(mask):
+            print 'Error: A . X not == b for any values inside the bounds...'
+
+        mask_inf = np.ones_like(mask, dtype=np.float)
+        mask_inf[np.where(mask)] = np.inf
+
+        # this generates a list of N dimensional X coords [X0, X1, X2, ..., XN-1]
+        # and the mask
+        grid_X = np.array([X0] + grid_X)
+        errors = err(grid_X.reshape((grid_X.shape[0], -1)))
+        errors = errors.reshape(grid_X[0].shape) * mask_inf
+
+        i = np.argmin(errors)
+        i = np.unravel_index(i, dims=X0.shape)
+        X = [grid_X[j][i] for j in range(len(A))]
+    return X
+
 def if_exists_del(fnam):
     # check that the directory exists and is a directory
     output_dir = os.path.split( os.path.realpath(fnam) )[0]
@@ -1076,7 +1147,7 @@ def update_progress(progress):
         progress = 1
         status = "Done...\r\n"
     block = int(round(barLength*progress))
-    text = "\rPercent: [{0}] {1:.1f}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
+    text = "\rPercent: [{0}] {1:.3f}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
     sys.stdout.write(text)
     sys.stdout.flush()
 

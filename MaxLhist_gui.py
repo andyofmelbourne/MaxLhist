@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
             
             F    = h5py.File(fnam, 'r')
             N    = np.median(np.sum(F['pix_map']['hist'][: 100], axis=1))
+            M    = len(F['pix_map'])
             Xs   = np.array(F['Xs'])
             ns   = np.array(F['pix_map']['n']) 
             gain = np.array(F['pix_map']['g'])
@@ -152,13 +153,14 @@ class MainWindow(QMainWindow):
                 self.viewables['action'][-1].triggered.connect(load_arr)
             
             H = MaxLhist_MPI.Histograms(fnam_sub_h5 = fnam)
-            self.show_preview(H)
+            self.show_preview(H, N, N*M, ns['v'])
         else :
             self.ui.actionUpdate_gain_offsets.setEnabled(False)
             self.ui.actionUpdate_Xs.setEnabled(False)
             self.ui.actionUpdate_counts.setEnabled(False)
             print '\nNo maxL data nothing to do... status = ', self.status[n]
             self.clear_preview()
+
 
     def load_array(self, array, name):
         geom_path='/home/amorgan/Desktop/nfs_home/data/fraglo/cheetah/calib/geometry/cspad-cxia2514-taw1.geom'
@@ -178,7 +180,7 @@ class MainWindow(QMainWindow):
         self.hists_e_Widget.clear()
 
 
-    def show_preview(self, H):
+    def show_preview(self, H, counts_per_pix, counts_tot, ns0):
         """
         display:
         the projected histogram
@@ -192,7 +194,7 @@ class MainWindow(QMainWindow):
         gs_name   = 'gain'
         errors    = H.errors
         total_counts = np.sum(H.pix_map['hist_cor'][pixels_valid])
-        hist_proj    = np.sum(H.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
+        #hist_proj    = np.sum(H.pix_map['hist_cor'][pixels_valid], axis=0) / total_counts
         p_errors  = H.pix_map['e'][pixels_valid]
         m_sort    = np.argsort(p_errors)
         mus       = H.pix_map['mu']['v'][pixels_valid]
@@ -202,14 +204,14 @@ class MainWindow(QMainWindow):
         ns        = H.pix_map['n']['v'][pixels_valid]
         
         # show f and the mu values
-        counts = np.sum(H.pix_map['hist'][pixels_valid], axis=-1)
-        total_counts = np.sum(counts)
+        #counts = np.sum(H.pix_map['hist'][pixels_valid], axis=-1)
+        #total_counts = np.sum(counts)
         
-        fi   = lambda f: H.Xs['v'][i] * np.sum(ns[:, i] * counts) / float(total_counts)
+        fi   = lambda f: H.Xs['v'][i] * np.sum(ns0[:, i] * counts_per_pix) / float(counts_tot)
         ftot = np.sum([fi(i) for i in range(H.Xs.shape[0])], axis=0) 
         
         # display
-        self.hist_projWidget.plot(np.arange(hist_proj.shape[0]+1), hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
+        self.hist_projWidget.plot(np.arange(H.hist_proj.shape[0]+1), H.hist_proj + 1.0e-10, fillLevel = 0.0, fillBrush = 0.7, stepMode = True)
          
         f_tot           = np.zeros_like(H.Xs['v'][0])
         for i in range(H.Xs.shape[0]):
