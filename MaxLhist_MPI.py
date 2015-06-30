@@ -899,7 +899,7 @@ class Histograms():
             self.Xs = self.pix_map = self.errors = None
 
 
-    def load_subsample_h5(self, fnam, subsample=2000):
+    def load_subsample_h5(self, fnam, subsample=1000):
         if rank == 0 :
             
             f = h5py.File(fnam, 'r')
@@ -1045,6 +1045,21 @@ def grid_condition_boundaries(err, A, b, bounds, N=10, iters=10):
         X = [grid_X[j][i] for j in range(len(A))]
     return X
 
+def if_exists_del(fnam):
+    # check that the directory exists and is a directory
+    output_dir = os.path.split( os.path.realpath(fnam) )[0]
+    if os.path.exists(output_dir) == False :
+        raise ValueError('specified path does not exist: ', output_dir)
+    
+    if os.path.isdir(output_dir) == False :
+        raise ValueError('specified path is not a path you dummy: ', output_dir)
+    
+    # see if it exists
+    # and if so delete it 
+    # (probably dangerous but otherwise this gets really anoying for debuging)
+    if os.path.exists(fnam):
+        print '\n', fnam ,'file already exists, deleting the old one and making a new one'
+        os.remove(fnam)
 
 def update_progress(progress):
     barLength = 20 # Modify this to change the length of the progress bar

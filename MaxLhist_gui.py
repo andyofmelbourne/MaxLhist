@@ -4,6 +4,7 @@
 import fnmatch, os, sys
 from PyQt4.QtGui import QDialog
 from PyQt4.QtGui import QMainWindow
+from PyQt4 import QtCore, QtGui
 import PyQt4.uic
 from PyQt4.QtGui import QApplication
 import ConfigParser
@@ -12,6 +13,21 @@ import numpy as np
 import MaxLhist_MPI
 import pyqtgraph as pg
 from subprocess import call
+import functools
+
+try:
+    _fromUtf8 = QtCore.QString.fromUtf8
+except AttributeError:
+    def _fromUtf8(s):
+        return s
+
+try:
+    _encoding = QtGui.QApplication.UnicodeUTF8
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+except AttributeError:
+    def _translate(context, text, disambig):
+        return QtGui.QApplication.translate(context, text, disambig)
 
 Ui_MainWindow, QMainWindow = PyQt4.uic.loadUiType('gui.ui')
 
@@ -104,8 +120,38 @@ class MainWindow(QMainWindow):
             fnam = self.hist_dirs[n] + '/maxL-'+self.hist_fnams[n]
             print '\nloading:', fnam 
             
-            H = MaxLhist_MPI.Histograms(fnam_sub_h5 = fnam)
+            F    = h5py.File(fnam, 'r')
+            N    = np.median(np.sum(F['pix_map']['hist'][: 100], axis=1))
+            Xs   = np.array(F['Xs'])
+            ns   = np.array(F['pix_map']['n']) 
+            gain = np.array(F['pix_map']['g'])
+            mus  = np.array(F['pix_map']['mu'])
+            F.close()
+
+            # populate the view menu with viewable arrays
+            self.ui.menuView.clear()
+            self.viewables = {}
+            self.viewables['name'] = []
+            self.viewables['array'] = []
+            for i in range(len(Xs)):
+                self.viewables['name'].append(Xs[i]['name'])
+                self.viewables['array'].append(ns['v'][:, i] * N)
             
+            self.viewables['name'].append('gain map')
+            self.viewables['array'].append(gain['v'])
+            
+            self.viewables['name'].append('offsets map')
+            self.viewables['array'].append(mus['v'])
+            
+            self.viewables['action'] = []
+            for name, array in zip(self.viewables['name'], self.viewables['array']):
+                self.viewables['action'].append(PyQt4.QtGui.QAction(self))
+                self.ui.menuView.addAction(self.viewables['action'][-1])
+                self.viewables['action'][-1].setText(_translate("MainWindow", "&"+name, None))
+                load_arr = functools.partial(self.load_array, array, name)
+                self.viewables['action'][-1].triggered.connect(load_arr)
+            
+            H = MaxLhist_MPI.Histograms(fnam_sub_h5 = fnam)
             self.show_preview(H)
         else :
             self.ui.actionUpdate_gain_offsets.setEnabled(False)
@@ -113,6 +159,17 @@ class MainWindow(QMainWindow):
             self.ui.actionUpdate_counts.setEnabled(False)
             print '\nNo maxL data nothing to do... status = ', self.status[n]
             self.clear_preview()
+
+    def load_array(self, array, name):
+        geom_path='/home/amorgan/Desktop/nfs_home/data/fraglo/cheetah/calib/geometry/cspad-cxia2514-taw1.geom'
+        print '\nWriting temporary file .gui_disp.h5...', geom_path, array.shape, array.dtype
+        MaxLhist_MPI.if_exists_del('./.gui_disp.h5')
+        f = h5py.File('.gui_disp.h5', 'w')
+        f.create_dataset('data/data', data=array.reshape((1480, 1552)))
+        f.close()
+
+        import subprocess
+        subprocess.Popen(["CsPadMaskMaker/maskMakerGUI.py", "-g" + geom_path, ".gui_disp.h5", "data/data"])
 
 
     def clear_preview(self):
@@ -350,6 +407,7 @@ class MainWindow(QMainWindow):
         Item = self.ui.tableWidget.currentItem()
         if Item is not None :
             self.preview_results(Item)
+
 
 if __name__ == "__main__":
     app    = QApplication(sys.argv)
