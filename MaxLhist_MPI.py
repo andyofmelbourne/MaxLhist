@@ -275,8 +275,8 @@ class Histograms():
             # errant counts
             counts_perpix = np.sum(hist, axis=-1)
             max           = np.max(counts_perpix)
-            sig           = 0.1 * max
-            bad_pix       = np.where(np.abs(counts_perpix - max) > sig)[0] 
+            sig           = 0.9 * max
+            bad_pix       = np.where(np.abs(counts_perpix.astype(np.float64) - max) > sig)[0] 
             
             if len(bad_pix) > 0 :
                 print '\n Warning: found', len(bad_pix), 'pixels with counts more than 10% from the max', int(max-sig), int(max+sig)
