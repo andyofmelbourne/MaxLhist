@@ -156,6 +156,12 @@ class Histograms():
                 print 'Error: no histogram data. For', data['name']
                 sys.exit()
             
+        # check the pixel mask
+        for data in datas:
+            if data.has_key('valid'):
+                if not d['valid'].has_key('value'):
+                    print '\ndataset', data['name'], 'has a valid pixel entry with no values will do nothing.'
+
         # get the unique vars
         vars = []
         for data in datas:
@@ -256,6 +262,13 @@ class Histograms():
             print '\n Setting histogram data for', d['name'], 'with pixel ids:', start, start + hist.shape[0]
             pix_map['hist'][start : start + hist.shape[0], :] = hist
             
+            # valid pixels
+            if d.has_key('valid'):
+                if d['valid'].has_key('valid'):
+                    if d['valid']['value'] is not None :
+                        print '\n Setting valid pixels for', d['name'], 'with the input values. In the range', start, start + hist.shape[0]
+                        pix_map['valid'][start : start + hist.shape[0]] = d['valid']['value']
+
             # inverse gain
             if d['gain']['value'] is not None :
                 print '\n Setting gain values for', d['name'], 'with the input values. In the range', start, start + hist.shape[0]
@@ -459,7 +472,7 @@ class Histograms():
         return f
         
 
-    def update_counts(self, N=5, iters=10):
+    def update_counts(self):
         """
         """
         M = float(self.pix_map['hist'].shape[0])
@@ -492,7 +505,7 @@ class Histograms():
                 self.pix_map['n']['v'][m][vs] = res.x / np.sum(res.x) 
 
 
-    def update_gain_offsets(self, quadfit=False, gmin=0.5, gmax=1.5, N=10, iters=3):
+    def update_gain_offsets(self, quadfit=False, gmin=0.5, gmax=1.5, N=10, iters=4):
         if rank == 0 : print '\n updating gain and offset values...', len(self.pix_map)
         I       = self.pix_map['hist'].shape[1]
         i       = np.arange(I).astype(np.float)
@@ -678,6 +691,7 @@ class Histograms():
             if np.sum(up[:, i]) == 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
                 if rank == 0 and verb : print ' only one X to update at adu value', i,' setting to the sum of the corrected hist'
                 my_X[vs_up[0], i] = hist_proj[i] / total_counts
+                continue
             
             # if we only have one var to update 
             # and there are other vars that are nonzero
@@ -689,22 +703,44 @@ class Histograms():
                     if self.Xs['v'][vs_up[0], i] < 0.0 :
                         my_X[vs_up[0], i] = 0.0
                     if rank == 0 and verb : print ' setting to the sum of the residual corrected hist', my_X[vs_up[0], i]
+                continue
 
             # if we have more than one var to update
             # and they are the only vars
             if np.sum(up[:, i]) > 1 and np.all((up[:, i] | nonzero) == up[:,i]) :
-                if rank == 0 and verb : print ' more than one var to update and they are the only vars, at adu', i
                 A      = np.sum(counts_n[:, vs_up], axis=0)
                 b      = hist_proj[i]
                 bounds = [(0.0, 1.0) for v in range(len(vs_up))]
                 def err(xs):
-                    e = -np.sum( hist_cor[i] * np.log(np.sum(ns * xs[np.newaxis, :], axis=1) + 1.0e-10) )
+                    e = -np.sum( hist_cor[i] * np.log(np.sum(ns[:, vs_up] * xs[np.newaxis, :], axis=1) + 1.0e-10) )
                     return e
                 
                 xs = grid_condition_boundaries(err, A, b, bounds, N=10, iters=10)
                 
                 my_X[vs_up, i] = xs
-        
+                continue
+
+            # if we have more than one var to update
+            # and there are other vars
+            else :
+                if verb : print ' more than one var to update and there are other vars, at adu', i
+                if verb : print '###########################################', up[:, i], (up[:, i] | nonzero), nonzero
+                A      = np.sum(counts_n[:, vs_up], axis=0)
+                b      = hist_proj[i]
+                bounds = [(0.0, 1.0) for v in range(len(vs_up))]
+                def err(xs):
+                    temp  = ns[:, vs_up]  * xs[np.newaxis, :]
+                    print temp.shape, ns.shape, ns[:, vs_nup].shape, my_X.shape, my_X[np.newaxis, vs_nup, i]
+                    temp += ns[:, vs_nup] * my_X[np.newaxis, vs_nup, i]
+                    e = -np.sum( hist_cor[i] * np.log(np.sum(temp, axis=1) + 1.0e-10) )
+                    return e
+                
+                xs = grid_condition_boundaries(err, A, b, bounds, N=10, iters=10)
+                
+                my_X[vs_up, i] = xs
+                continue
+            
+
         if rank == 0 : print '\n reducing the Xs to everyone...'
         self.Xs['v'][:] = comm.allreduce(my_X, op=MPI.SUM)
         

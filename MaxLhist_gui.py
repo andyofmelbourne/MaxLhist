@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
         print '\nWriting temporary file .gui_disp.h5...', geom_path, array.shape, array.dtype
         MaxLhist_MPI.if_exists_del('./.gui_disp.h5')
         f = h5py.File('.gui_disp.h5', 'w')
-        f.create_dataset('data/data', data=array.reshape((1480, 1552)))
+        f.create_dataset('data/data', data=array)
         f.close()
 
         import subprocess
