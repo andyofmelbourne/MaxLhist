@@ -251,6 +251,9 @@ if __name__ == '__main__':
             hplots.append(win.addPlot(title="histogram pixel " + str(m), y = hists[m], name = 'hist' + str(m)))
             hplots[-1].setXLink('f')
         win.nextRow()
+
+    #w.show()
+    app.exec_()
     """
     ## Start Qt event loop unless running in interactive mode or using pyside.
     if __name__ == '__main__':
